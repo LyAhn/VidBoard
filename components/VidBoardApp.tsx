@@ -13,6 +13,14 @@ import {
 
 type AspectRatio = "16:9" | "9:16" | "1:1";
 
+const planningSteps = [
+  "Searching the web for artist context",
+  "Writing the director context guide",
+  "Building the visual bible",
+  "Structuring the storyboard JSON",
+  "Checking prompts and finishing blueprint",
+];
+
 interface FramePlan {
   frame_number: number;
   timestamp_hint: string;
@@ -70,6 +78,8 @@ export default function VidBoardApp() {
   });
 
   const [isClient, setIsClient] = useState(false);
+  const [planningElapsed, setPlanningElapsed] = useState(0);
+  const [planningStepIndex, setPlanningStepIndex] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -103,6 +113,23 @@ export default function VidBoardApp() {
   };
 
   useEffect(() => {
+    if (!state.isPlanning) {
+      setPlanningElapsed(0);
+      setPlanningStepIndex(0);
+      return;
+    }
+
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      setPlanningElapsed(elapsed);
+      setPlanningStepIndex(Math.min(planningSteps.length - 1, Math.floor(elapsed / 25)));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [state.isPlanning]);
+
+  useEffect(() => {
     if (!isClient) return;
     const stateToSave = {
       artistName: state.artistName,
@@ -130,12 +157,57 @@ export default function VidBoardApp() {
   };
 
   const handleGenerate = async () => {
+    if (!state.artistName || !state.trackTitle || !state.lyrics) {
+      updateState({ error: "Please fill in artist name, track title, and lyrics." });
+      return;
+    }
+
     updateState({
-      error: "Local AI backend not yet connected. See issues #2, #3, #4.",
-      isPlanning: false,
+      isPlanning: true,
       isGeneratingImages: false,
-      statusMessage: null,
+      error: null,
+      artistContext: null,
+      visualBible: null,
+      frames: [],
+      statusMessage: "Planning blueprint...",
     });
+
+    try {
+      const response = await fetch("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          artistName: state.artistName,
+          trackTitle: state.trackTitle,
+          lyrics: state.lyrics,
+          theme: state.theme,
+          numberOfFrames: state.numberOfFrames,
+          aspectRatio: state.aspectRatio,
+        }),
+      });
+
+      const planData = await response.json();
+      if (!response.ok) {
+        throw new Error(planData.error || "Failed to plan storyboard.");
+      }
+
+      const frames = planData.frames as FramePlan[];
+      updateState({
+        artistContext: planData.artistContext,
+        visualBible: planData.visualBible,
+        frames: frames.map((frame) => ({ ...frame, isGenerating: false })),
+        isPlanning: false,
+        isGeneratingImages: false,
+        statusMessage: null,
+      });
+    } catch (err) {
+      updateState({
+        error: err instanceof Error ? err.message : "Failed to plan storyboard.",
+        isPlanning: false,
+        isGeneratingImages: false,
+        statusMessage: null,
+      });
+    }
   };
 
   const handleRetryImages = async () => {
@@ -172,62 +244,150 @@ export default function VidBoardApp() {
   const exportPDF = async () => {
     if (!state.frames.length) return;
     const pdf = new jsPDF("landscape", "mm", "a4");
-    
-    // Cover Page
-    pdf.setFontSize(30);
-    pdf.text(`${state.artistName} - ${state.trackTitle}`, 10, 30);
-    pdf.setFontSize(14);
-    pdf.text(`Theme/Mood: ${state.theme}`, 10, 45);
-    pdf.text(`Total Clips: ${state.frames.length}`, 10, 55);
-    
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 14;
+    const contentWidth = pageWidth - margin * 2;
+
+    const writeWrapped = (
+      text: string,
+      x: number,
+      y: number,
+      width: number,
+      lineHeight = 5
+    ) => {
+      const lines = pdf.splitTextToSize(text, width) as string[];
+      pdf.text(lines, x, y);
+      return y + lines.length * lineHeight;
+    };
+
+    const sectionLabel = (label: string, x: number, y: number) => {
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9);
+      pdf.setTextColor(160, 100, 0);
+      pdf.text(label.toUpperCase(), x, y);
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFont("helvetica", "normal");
+    };
+
+    const stripVisualBible = (prompt: string) => {
+      const visualBible = state.visualBible?.trim();
+      const trimmed = prompt.trim();
+      if (visualBible && trimmed.startsWith(visualBible)) {
+        return trimmed.slice(visualBible.length).trim();
+      }
+      return trimmed;
+    };
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(26);
+    pdf.text(`${state.artistName} - ${state.trackTitle}`, margin, 24);
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(12);
+    pdf.text(`Theme/Mood: ${state.theme || "Not specified"}`, margin, 39);
+    pdf.text(`Total Clips: ${state.frames.length}`, margin, 48);
+
     if (state.visualBible) {
-      pdf.setFontSize(12);
-      pdf.text("Visual Bible Constraints:", 10, 75);
-      const vbLines = pdf.splitTextToSize(state.visualBible, 270);
-      pdf.setFont("helvetica", 'italic');
-      pdf.text(vbLines, 10, 85);
-      pdf.setFont("helvetica", 'normal');
+      sectionLabel("Visual Bible", margin, 67);
+      pdf.setFont("helvetica", "italic");
+      pdf.setFontSize(11);
+      writeWrapped(state.visualBible, margin, 76, contentWidth, 5);
+      pdf.setFont("helvetica", "normal");
     }
-    
-    // Frame Pages
+
     for (let i = 0; i < state.frames.length; i++) {
       const f = state.frames[i];
       pdf.addPage();
-      
-      pdf.setFontSize(16);
-      pdf.text(`Frame ${f.frame_number}: ${f.timestamp_hint}  |  Clip ${i+1} of ${state.frames.length}`, 10, 15);
-      
-      pdf.setFontSize(10);
-      pdf.text(`Lyric: "${f.lyric_line}"`, 10, 22);
-      pdf.text(`Camera: ${f.camera_angle} | Lighting: ${f.lighting} | Palette: ${f.colour_palette}`, 10, 28);
-      
-      // Flow Prompt Box
-      pdf.setFillColor(240, 240, 240);
-      pdf.rect(10, 32, 277, 10, "F");
-      pdf.text(`Flow Prompt: ${f.flow_prompt}`, 12, 38);
-      
-      // Image Prompt Box (Monospace)
-      const promptLines = pdf.splitTextToSize(`Image Prompt: ${f.image_prompt}`, 273);
-      pdf.setFont("courier");
-      pdf.text(promptLines, 10, 48);
-      pdf.setFont("helvetica");
 
-      // Images
-      let imgY = 48 + (promptLines.length * 4) + 5;
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(17);
+      pdf.text(`Frame ${f.frame_number}: ${f.timestamp_hint} | Clip ${i + 1} of ${state.frames.length}`, margin, 18);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(10);
+      let y = writeWrapped(`Lyric: "${f.lyric_line}"`, margin, 28, contentWidth, 5) + 3;
+
+      const columnGap = 8;
+      const columnWidth = (contentWidth - columnGap * 2) / 3;
+      sectionLabel("Camera", margin, y);
+      sectionLabel("Lighting", margin + columnWidth + columnGap, y);
+      sectionLabel("Palette", margin + (columnWidth + columnGap) * 2, y);
+      pdf.setFontSize(9);
+      y += 7;
+      const cameraY = writeWrapped(f.camera_angle, margin, y, columnWidth, 4.3);
+      const lightingY = writeWrapped(f.lighting, margin + columnWidth + columnGap, y, columnWidth, 4.3);
+      const paletteY = writeWrapped(f.colour_palette, margin + (columnWidth + columnGap) * 2, y, columnWidth, 4.3);
+      y = Math.max(cameraY, lightingY, paletteY) + 5;
+
+      sectionLabel("Scene", margin, y);
+      pdf.setFontSize(10);
+      y = writeWrapped(f.scene_description, margin, y + 7, contentWidth, 5) + 4;
+
+      pdf.setFillColor(245, 238, 225);
+      pdf.rect(margin, y, contentWidth, 15, "F");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9);
+      pdf.text("FLOW PROMPT", margin + 3, y + 6);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(10);
+      writeWrapped(f.flow_prompt, margin + 35, y + 6, contentWidth - 40, 5);
+      y += 23;
+
+      sectionLabel("Generation Prompt Preview", margin, y);
+      pdf.setFont("courier", "normal");
+      pdf.setFontSize(8);
+      const promptPreview = stripVisualBible(f.image_prompt);
+      const previewLines = pdf.splitTextToSize(promptPreview, contentWidth) as string[];
+      pdf.text(previewLines.slice(0, 8), margin, y + 7);
+      pdf.setFont("helvetica");
+      y += 45;
+
       const format = state.aspectRatio === "16:9" ? {w: 120, h: 67.5} : state.aspectRatio === "9:16" ? {w: 45, h: 80} : {w: 60, h: 60};
+      const imgY = Math.min(y + 4, pageHeight - format.h - 16);
       
       if (f.startImageBase64) {
-        pdf.text("Flow Start Frame", 10, imgY - 2);
+        pdf.setFontSize(9);
+        pdf.text("Flow Start Frame", margin, imgY - 2);
         const dataUrl = f.startImageBase64.includes("data:image") ? f.startImageBase64 : `data:image/png;base64,${f.startImageBase64}`;
-        pdf.addImage(dataUrl, 'PNG', 10, imgY, format.w, format.h);
+        pdf.addImage(dataUrl, 'PNG', margin, imgY, format.w, format.h);
       }
       
       if (f.endImageBase64) {
-        pdf.text("Flow End Frame", 140, imgY - 2);
+        pdf.setFontSize(9);
+        pdf.text("Flow End Frame", margin + 135, imgY - 2);
         const dataUrl = f.endImageBase64.includes("data:image") ? f.endImageBase64 : `data:image/png;base64,${f.endImageBase64}`;
-        pdf.addImage(dataUrl, 'PNG', 140, imgY, format.w, format.h);
+        pdf.addImage(dataUrl, 'PNG', margin + 135, imgY, format.w, format.h);
       }
     }
+
+    pdf.addPage();
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(18);
+    pdf.text("Appendix: Full Generation Prompts", margin, 18);
+
+    let appendixY = 31;
+    state.frames.forEach((frame, idx) => {
+      const prompt = frame.image_prompt.trim();
+      const lines = pdf.splitTextToSize(prompt, contentWidth) as string[];
+      const needed = 11 + lines.length * 3.6;
+
+      if (appendixY + needed > pageHeight - margin) {
+        pdf.addPage();
+        appendixY = 18;
+      }
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10);
+      pdf.text(`Frame ${frame.frame_number || idx + 1}: ${frame.timestamp_hint}`, margin, appendixY);
+      appendixY += 6;
+
+      pdf.setFont("courier", "normal");
+      pdf.setFontSize(7);
+      pdf.text(lines, margin, appendixY);
+      appendixY += lines.length * 3.6 + 8;
+    });
     
     pdf.save(`${state.artistName}_Storyboard.pdf`.replace(/\s+/g, '_'));
   };
@@ -319,6 +479,31 @@ export default function VidBoardApp() {
 
         </div>
 
+        {state.isPlanning && (
+          <div className="rounded-md border border-amber-500/25 bg-amber-500/10 p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-400">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Planning
+              </div>
+              <span className="text-[10px] font-mono text-amber-200/80">{planningElapsed}s</span>
+            </div>
+            <div className="space-y-2">
+              {planningSteps.map((step, idx) => (
+                <div key={step} className="flex items-center gap-2 text-[10px]">
+                  <span className={`h-1.5 w-1.5 rounded-full ${idx <= planningStepIndex ? "bg-amber-400" : "bg-neutral-700"}`}></span>
+                  <span className={idx === planningStepIndex ? "text-amber-100" : idx < planningStepIndex ? "text-neutral-400" : "text-neutral-600"}>
+                    {step}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] leading-relaxed text-neutral-500">
+              Local planning can take a minute or two while Ollama reads web results and writes structured JSON.
+            </p>
+          </div>
+        )}
+
         <button 
           disabled={state.isPlanning || state.isGeneratingImages}
           onClick={handleGenerate}
@@ -378,7 +563,7 @@ export default function VidBoardApp() {
             <div className="glass rounded-xl p-4 flex flex-col md:flex-row gap-6 items-start shrink-0">
               <div className="flex-1">
                 <h2 className="text-[10px] text-amber-500 uppercase font-black mb-2 tracking-[0.2em] flex items-center gap-2">
-                   <Activity className="w-3 h-3" /> Artist Research (Search Grounded)
+                   <Activity className="w-3 h-3" /> Artist Research (Ollama Web Search)
                 </h2>
                 <div className="text-sm text-gray-400 leading-relaxed italic border-l-2 border-amber-500/30 pl-4 whitespace-pre-wrap">
                   {state.artistContext}
@@ -446,9 +631,14 @@ export default function VidBoardApp() {
                         />
                       ) : frame.error ? (
                         <div className="absolute inset-0 flex items-center justify-center bg-red-500/5 text-red-500 p-2 text-[10px]">Failed</div>
-                      ) : (
+                      ) : frame.isGenerating ? (
                         <div className="absolute inset-0 flex items-center justify-center bg-neutral-900/50">
                           <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                        </div>
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-neutral-900/50 text-neutral-500">
+                          <ImageIcon className="w-5 h-5" />
+                          <span className="text-[9px] uppercase font-bold tracking-widest">Image pending</span>
                         </div>
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none"></div>
@@ -471,9 +661,14 @@ export default function VidBoardApp() {
                         />
                       ) : frame.error ? (
                         <div className="absolute inset-0 flex items-center justify-center bg-red-500/5 text-red-500 p-2 text-[10px]">Failed</div>
-                      ) : (
+                      ) : frame.isGenerating ? (
                         <div className="absolute inset-0 flex items-center justify-center bg-neutral-900/50">
                           <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+                        </div>
+                      ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-neutral-900/50 text-neutral-500">
+                          <ImageIcon className="w-5 h-5" />
+                          <span className="text-[9px] uppercase font-bold tracking-widest">Image pending</span>
                         </div>
                       )}
                       <div className="absolute top-2 left-2 bg-black/60 text-white font-bold text-[9px] px-1.5 py-0.5 rounded uppercase">END</div>
