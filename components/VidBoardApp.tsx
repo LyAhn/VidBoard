@@ -13,8 +13,6 @@ import {
 
 type AspectRatio = "16:9" | "9:16" | "1:1";
 
-import { GoogleGenAI, Type } from "@google/genai";
-
 interface FramePlan {
   frame_number: number;
   timestamp_hint: string;
@@ -132,358 +130,20 @@ export default function VidBoardApp() {
   };
 
   const handleGenerate = async () => {
-    if (!state.artistName || !state.trackTitle || !state.lyrics) {
-      updateState({ error: "Please fill in artist name, track title, and lyrics." });
-      return;
-    }
-
-    updateState({ 
-      isPlanning: true, 
-      error: null, 
-      artistContext: null,
-      visualBible: null,
-      frames: [], 
+    updateState({
+      error: "Local AI backend not yet connected. See issues #2, #3, #4.",
+      isPlanning: false,
       isGeneratingImages: false,
-      statusMessage: "Researching artist on Google...",
+      statusMessage: null,
     });
-
-    try {
-      const apiKey = process.env.API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error("Missing Gemini API Key. Please add it to your secrets or select one.");
-      }
-      const ai = new GoogleGenAI({ apiKey });
-
-      // Step 1: Research
-      const researchPrompt = `Research the artist "${state.artistName}" and their track "${state.trackTitle}".
-Provide a concise but detailed overview containing:
-- Genre, era, and core musical style.
-- Visual aesthetics associated with the artist (e.g. from existing music videos, live performances, album artwork).
-- Band members or key figures involved if relevant.
-- Common visual themes they rely on.
-
-Synthesize this into a structured context guide to inform the pre-production storyboard for a new music video for this track.`;
-
-      const researchResponse = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: researchPrompt,
-        config: {
-          tools: [{ googleSearch: {} }],
-          toolConfig: { includeServerSideToolInvocations: true }
-        }
-      });
-      const artistContext = researchResponse.text || "";
-      
-      updateState({ artistContext, statusMessage: "Generating Visual Bible..." });
-
-      // Step 1.5: Visual Bible
-      const vbPrompt = `Based on the artist context for ${state.artistName} - ${state.trackTitle}, create a "Visual Bible" for a music video.
-This MUST include:
-1. FIXED COLOUR GRADE: Specific hex palette and overall color mood.
-2. FIXED ENVIRONMENT ANCHOR: e.g. "all scenes occur in or around a decayed gothic cathedral"
-3. FIXED CHARACTER DESCRIPTION: Detailed visual description of the main subject/artist.
-
-Return as a concise summary paragraph.`;
-      const vbResponse = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: vbPrompt
-      });
-      const visualBible = vbResponse.text || "";
-      updateState({ visualBible, statusMessage: "Writing storyboard plan..." });
-
-      // Step 2: Planning
-      const planPrompt = `You are an expert music video director and storyboard artist.
-Your task is to plan a storyboard sequence for a music video.
-
-Track Info:
-- Artist: ${state.artistName}
-- Track: ${state.trackTitle}
-- Target Theme/Mood: ${state.theme}
-- Aspect Ratio: ${state.aspectRatio}
-- Target Number of Frames: ${state.numberOfFrames}
-
-Artist Context & Vibe:
-${artistContext}
-
-Visual Bible Constraints (MUST prepend to every image_prompt):
-${visualBible}
-
-Lyrics:
-${state.lyrics}
-
-Create a structured storyboard plan with exactly ${state.numberOfFrames} frames distributed evenly across the song structure (e.g. intro, verses, chorus, bridge, outro).
-For each frame, provide:
-1. 'frame_number': Sequence number.
-2. 'timestamp_hint': Song section (e.g., 'Verse 1').
-3. 'lyric_line': The lyric line representing this frame.
-4. 'scene_description': Detailed visual description.
-5. 'camera_angle': Camera angle or shot type.
-6. 'lighting': Lighting style.
-7. 'colour_palette': Colors used.
-8. 'motion_hint': Implied camera/subject movement for a video generation system.
-9. 'flow_prompt': A short, Flow-optimised motion description written in the format: "[Subject] [action verb] [direction/manner], [camera movement if any]". Maximum 20 words.
-10. 'image_prompt': A complete, self-contained generative AI image prompt for Nano Banana model indicating character details, environment, lighting, and style. MUST begin exactly with the Visual Bible constraints.
-11. 'character_present': Boolean true if the frame features the main human subject (artist/character).`;
-
-      const planResponse = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: planPrompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              track: { type: Type.STRING },
-              artist: { type: Type.STRING },
-              mood: { type: Type.STRING },
-              genre: { type: Type.STRING },
-              frames: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    frame_number: { type: Type.INTEGER },
-                    timestamp_hint: { type: Type.STRING },
-                    lyric_line: { type: Type.STRING },
-                    scene_description: { type: Type.STRING },
-                    camera_angle: { type: Type.STRING },
-                    lighting: { type: Type.STRING },
-                    colour_palette: { type: Type.STRING },
-                    motion_hint: { type: Type.STRING },
-                    flow_prompt: { type: Type.STRING },
-                    image_prompt: { type: Type.STRING },
-                    character_present: { type: Type.BOOLEAN }
-                  },
-                  required: [
-                    "frame_number", "timestamp_hint", "lyric_line", "scene_description",
-                    "camera_angle", "lighting", "colour_palette", "motion_hint", "flow_prompt", "image_prompt", "character_present"
-                  ]
-                }
-              }
-            },
-            required: ["track", "artist", "mood", "genre", "frames"]
-          }
-        }
-      });
-      
-      const planOutput = planResponse.text || "{}";
-      const dataPlan = JSON.parse(planOutput);
-
-      const frames = dataPlan.frames as FramePlan[];
-      const framesWithState: FrameData[] = frames.map(f => ({ ...f, isGenerating: true }));
-      
-      updateState({ frames: framesWithState, isPlanning: false, isGeneratingImages: true, statusMessage: "Rendering frames..." });
-
-      // Step 3: Generate Images
-      // For rate limits, we will do them in small batches or sequentially with delay
-      const generatedFrames = [...framesWithState];
-      
-      for (let i = 0; i < generatedFrames.length; i++) {
-        updateState({ statusMessage: `Rendering frame ${i + 1} of ${generatedFrames.length}...` });
-        
-        try {
-          const framePlan = generatedFrames[i];
-          const hasRefImg = framePlan.character_present && state.characterReferenceImage;
-          
-          const partsRef: any[] = [];
-          if (hasRefImg) {
-            partsRef.push({
-              inlineData: {
-                data: state.characterReferenceImage!.replace(/^data:image\/[a-z]+;base64,/, ""),
-                mimeType: "image/png"
-              }
-            });
-          } else {
-             // temporal consistency from previous frames
-             const referenceImages = generatedFrames
-              .slice(Math.max(0, i - 1), i)
-              .map(f => f.endImageBase64 || f.startImageBase64)
-              .filter(Boolean);
-              
-             if (referenceImages.length > 0) {
-                 partsRef.push({
-                   inlineData: {
-                     data: referenceImages[0]!.replace(/^data:image\/[a-z]+;base64,/, ""),
-                     mimeType: "image/png"
-                   }
-                 });
-             }
-          }
-
-          // Generate Start Frame
-          await new Promise(r => setTimeout(r, 4500)); // Respect free tier rate limit
-          const startPrompt = `${state.visualBible}\n\n${framePlan.image_prompt}\nStart Frame: Shows the initial scene setup before motion.`;
-          const startResponse = await ai.models.generateContent({
-            model: "gemini-2.5-flash-image",
-            contents: { parts: [...partsRef, { text: startPrompt }] },
-            config: { imageConfig: { aspectRatio: state.aspectRatio || "16:9", imageSize: "1K" } }
-          });
-          let startImageBase64: string | undefined;
-          for (const part of startResponse.candidates?.[0]?.content?.parts || []) {
-            if (part.inlineData) {
-              startImageBase64 = part.inlineData.data;
-              break;
-            }
-          }
-          
-          if (!startImageBase64) throw new Error("No start image generated.");
-          
-          // Generate End Frame
-          await new Promise(r => setTimeout(r, 4500)); // Respect free tier rate limit
-          const endPrompt = `${state.visualBible}\n\n${framePlan.image_prompt}\nEnd Frame: Shows the scene AFTER this motion: "${framePlan.flow_prompt}". Ensure characters, environment, lighting match the previous image but progressed along the motion.`;
-          const endResponse = await ai.models.generateContent({
-            model: "gemini-2.5-flash-image",
-            contents: { parts: [{inlineData: { data: startImageBase64, mimeType: "image/png"}}, {text: endPrompt}] },
-            config: { imageConfig: { aspectRatio: state.aspectRatio || "16:9", imageSize: "1K" } }
-          });
-
-          let endImageBase64: string | undefined;
-          for (const part of endResponse.candidates?.[0]?.content?.parts || []) {
-            if (part.inlineData) {
-              endImageBase64 = part.inlineData.data;
-              break;
-            }
-          }
-
-          if (!endImageBase64) throw new Error("No end image generated by the model.");
-
-          generatedFrames[i] = {
-            ...generatedFrames[i],
-            startImageBase64,
-            endImageBase64,
-            isGenerating: false,
-          };
-          
-          // Yield to update UI
-          updateState({ frames: [...generatedFrames] });
-        } catch (imgErr: any) {
-          console.error("Frame generation error:", imgErr);
-          generatedFrames[i] = {
-            ...generatedFrames[i],
-            isGenerating: false,
-            error: imgErr.message || "Failed to generate"
-          };
-          updateState({ frames: [...generatedFrames] });
-          
-          if (imgErr.message?.toLowerCase().includes("quota") || imgErr.message?.includes("429")) {
-             // Instead of failing completely, wait and let them retry later
-             updateState({ error: "API Quota exceeded. Please wait a minute before generating more.", isGeneratingImages: false, statusMessage: null });
-             break;
-          }
-        }
-      }
-
-      updateState({ isGeneratingImages: false, statusMessage: null });
-
-    } catch (err: any) {
-      updateState({ error: err.message, isPlanning: false, isGeneratingImages: false, statusMessage: null });
-    }
   };
 
   const handleRetryImages = async () => {
-    updateState({ isGeneratingImages: true, error: null, statusMessage: "Retrying failed frames..." });
-
-    try {
-      const apiKey = process.env.API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error("Missing Gemini API Key. Please add it to your secrets or select one.");
-      }
-      const ai = new GoogleGenAI({ apiKey });
-      
-      const generatedFrames = [...state.frames];
-      for (let i = 0; i < generatedFrames.length; i++) {
-        const framePlan = generatedFrames[i];
-        if (framePlan.startImageBase64 && framePlan.endImageBase64) continue;
-        
-        updateState({ statusMessage: `Rendering frame ${i + 1} of ${generatedFrames.length}...` });
-        generatedFrames[i] = { ...generatedFrames[i], isGenerating: true, error: undefined };
-        updateState({ frames: [...generatedFrames] });
-
-        try {
-          const hasRefImg = framePlan.character_present && state.characterReferenceImage;
-          
-          const partsRef: any[] = [];
-          if (hasRefImg) {
-            partsRef.push({
-              inlineData: {
-                data: state.characterReferenceImage!.replace(/^data:image\/[a-z]+;base64,/, ""),
-                mimeType: "image/png"
-              }
-            });
-          } else {
-             const referenceImages = generatedFrames
-              .slice(Math.max(0, i - 1), i)
-              .map(f => f.endImageBase64 || f.startImageBase64)
-              .filter(Boolean);
-              
-             if (referenceImages.length > 0) {
-                 partsRef.push({
-                   inlineData: {
-                     data: referenceImages[0]!.replace(/^data:image\/[a-z]+;base64,/, ""),
-                     mimeType: "image/png"
-                   }
-                 });
-             }
-          }
-
-          await new Promise(r => setTimeout(r, 4500)); // Respect free tier rate limit
-          const startPrompt = `${state.visualBible}\n\n${framePlan.image_prompt}\nStart Frame: Shows the initial scene setup before motion.`;
-          const startResponse = await ai.models.generateContent({
-            model: "gemini-2.5-flash-image",
-            contents: { parts: [...partsRef, { text: startPrompt }] },
-            config: { imageConfig: { aspectRatio: state.aspectRatio || "16:9", imageSize: "1K" } }
-          });
-          let startImageBase64: string | undefined;
-          for (const part of startResponse.candidates?.[0]?.content?.parts || []) {
-            if (part.inlineData) {
-              startImageBase64 = part.inlineData.data;
-              break;
-            }
-          }
-          if (!startImageBase64) throw new Error("No start image generated.");
-          
-          await new Promise(r => setTimeout(r, 4500)); // Respect free tier rate limit
-          const endPrompt = `${state.visualBible}\n\n${framePlan.image_prompt}\nEnd Frame: Shows the scene AFTER this motion: "${framePlan.flow_prompt}". Ensure characters, environment, lighting match the previous image but progressed along the motion.`;
-          const endResponse = await ai.models.generateContent({
-            model: "gemini-2.5-flash-image",
-            contents: { parts: [{inlineData: { data: startImageBase64, mimeType: "image/png"}}, {text: endPrompt}] },
-            config: { imageConfig: { aspectRatio: state.aspectRatio || "16:9", imageSize: "1K" } }
-          });
-
-          let endImageBase64: string | undefined;
-          for (const part of endResponse.candidates?.[0]?.content?.parts || []) {
-             if (part.inlineData) {
-               endImageBase64 = part.inlineData.data;
-               break;
-             }
-          }
-          if (!endImageBase64) throw new Error("No end image generated by the model.");
-
-          generatedFrames[i] = {
-            ...generatedFrames[i],
-            startImageBase64,
-            endImageBase64,
-            isGenerating: false,
-          };
-          updateState({ frames: [...generatedFrames] });
-        } catch (imgErr: any) {
-          console.error("Frame generation error:", imgErr);
-          generatedFrames[i] = {
-            ...generatedFrames[i],
-            isGenerating: false,
-            error: imgErr.message || "Failed to generate"
-          };
-          updateState({ frames: [...generatedFrames] });
-          if (imgErr.message?.toLowerCase().includes("quota") || imgErr.message?.includes("429")) {
-             updateState({ error: "API Quota exceeded. Please wait a minute before generating more.", isGeneratingImages: false, statusMessage: null });
-             break;
-          }
-        }
-      }
-      updateState({ isGeneratingImages: false, statusMessage: null });
-    } catch (err: any) {
-      updateState({ error: err.message, isGeneratingImages: false, statusMessage: null });
-    }
+    updateState({
+      error: "Local AI backend not yet connected. See issues #2, #3, #4.",
+      isGeneratingImages: false,
+      statusMessage: null,
+    });
   };
 
   const downloadZip = async () => {
@@ -904,10 +564,10 @@ For each frame, provide:
         {/* Status Footer */}
         {state.frames.length > 0 && !state.isGeneratingImages && (
           <div className="mt-auto shrink-0 h-12 border-t border-[#1a1a1a] flex items-center justify-between px-6 opacity-50 bg-[#050505]">
-            <p className="text-[10px] uppercase tracking-widest text-[#e5e5e5]">Status: All Frames Optimized for Google Flow</p>
+            <p className="text-[10px] uppercase tracking-widest text-[#e5e5e5]">Status: All Frames Optimized for local video workflow</p>
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-              <span className="text-[10px] font-bold uppercase text-[#e5e5e5]">Nano Banana Engine Active</span>
+              <span className="text-[10px] font-bold uppercase text-[#e5e5e5]">Local FLUX Engine Active</span>
             </div>
           </div>
         )}

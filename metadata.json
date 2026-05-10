@@ -1,6 +1,6 @@
 {
   "name": "VidBoard",
-  "description": "A creative pre-production storyboard app that uses Gemini AI and Nano Banana to generate a set of storyboard frames from a track's lyrics, artist context, and theme.",
+  "description": "A creative pre-production storyboard app for generating storyboard frame plans from a track's lyrics, artist context, and theme.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

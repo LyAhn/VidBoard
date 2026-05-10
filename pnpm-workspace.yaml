@@ -1,5 +1,4 @@
 allowBuilds:
-  '@google/genai': false
   '@tailwindcss/oxide': true
   core-js: false
   protobufjs: false
