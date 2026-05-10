@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --color-glow-blue: rgba(0, 209, 255, 0.4);
+  --color-glow-amber: rgba(255, 184, 0, 0.3);
+}
+
+@layer utilities {
+  .glass {
+    background: rgba(20, 20, 20, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .amber-glow:hover {
+    box-shadow: 0 0 15px var(--color-glow-amber);
+    transition: all 0.3s ease;
+  }
+  .input-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #888;
+    font-weight: 600;
+  }
+}
