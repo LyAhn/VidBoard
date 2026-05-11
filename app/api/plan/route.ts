@@ -95,17 +95,10 @@ const formatSearchResult = (result: SearchResult) => {
   return `[${heading}]\n${result.content}`;
 };
 
-const prependVisualBible = (frame: StoryboardFrame, visualBible: string) => {
-  const imagePrompt = frame.image_prompt.trim();
-  const trimmedVisualBible = visualBible.trim();
-
-  return {
-    ...frame,
-    image_prompt: imagePrompt.startsWith(trimmedVisualBible)
-      ? imagePrompt
-      : `${trimmedVisualBible}\n\n${imagePrompt}`,
-  };
-};
+const normalizeFramePrompt = (frame: StoryboardFrame) => ({
+  ...frame,
+  image_prompt: frame.image_prompt.trim(),
+});
 
 const logStep = (label: string, startedAt: number) => {
   console.log(`Ollama planning: ${label}`, {
@@ -169,7 +162,7 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "user",
-          content: `Based on this artist context:\n${artistContext}\n\nCreate a Visual Bible for a "${artistName} - ${trackTitle}" music video. Theme: "${theme}".\nMust include:\n1. FIXED COLOUR GRADE: specific hex palette and overall colour mood.\n2. FIXED ENVIRONMENT ANCHOR: e.g. "all scenes occur in or around a decayed gothic cathedral".\n3. FIXED CHARACTER DESCRIPTION: detailed visual description of main subject/artist appearance.\n\nReturn as a concise paragraph.`,
+          content: `Based on this artist context:\n${artistContext}\n\nCreate a compact live-action Visual Bible for a "${artistName} - ${trackTitle}" music video. Theme: "${theme}".\nMust include:\n1. FIXED COLOUR GRADE: specific hex palette and overall colour mood.\n2. FIXED ENVIRONMENT ANCHOR: one repeatable location family, not one identical room for every shot.\n3. FIXED CHARACTER DESCRIPTION: detailed visual description of the main subject/artist appearance, wardrobe, hair, props, and instruments.\n4. REALISM LOCK: phrase the style as live-action cinematography, not illustration, fantasy concept art, anime, CGI, or album artwork.\n\nReturn one concise paragraph. Do not over-describe scene actions here; leave per-frame action to the storyboard.`,
         },
       ],
     });
@@ -184,7 +177,7 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "user",
-          content: `You are an expert music video director. Plan a ${numberOfFrames}-frame storyboard for "${artistName} - ${trackTitle}".\nTheme: ${theme}. Aspect ratio: ${aspectRatio}.\n\nVisual Bible (prepend to every image_prompt only):\n${visualBible}\n\nLyrics:\n${lyrics}\n\nDistribute frames across song structure (intro, verses, chorus, bridge, outro).\n\nRules:\n- image_prompt must be fully self-contained, cinematic, and begin with the Visual Bible constraints verbatim.\n- flow_prompt must be only a short video motion instruction. Maximum 20 words.\n- flow_prompt must not include the Visual Bible, image prompt, markdown, placeholders, brackets, or scene_description text.\n- Use concrete camera/subject movement, e.g. "Performer turns toward camera as fog rolls through stained glass."`,
+          content: `You are an expert music video storyboard director. Plan a ${numberOfFrames}-frame storyboard for "${artistName} - ${trackTitle}".\nTheme: ${theme}. Aspect ratio: ${aspectRatio}.\n\nLocked Visual Bible:\n${visualBible}\n\nLyrics:\n${lyrics}\n\nDistribute frames across song structure (intro, verses, chorus, bridge, outro).\n\nRules:\n- Each frame must be visually distinct: vary shot scale, blocking, pose, foreground action, prop focus, and camera movement.\n- Keep character identity, wardrobe, instruments, environment family, and colour grade continuous across the whole storyboard.\n- image_prompt must be a frame-specific live-action photography prompt. It must not repeat the full Visual Bible verbatim.\n- image_prompt must describe only this shot's composition, subject action, foreground props, and camera placement.\n- image_prompt must not ask for visible text, captions, subtitles, lyrics, typography, signs, logos, labels, posters, or written words.\n- Avoid generic band-standing tableaux unless the lyric/section demands a performance shot.\n- flow_prompt must be only a short video motion instruction. Maximum 20 words.\n- flow_prompt must not include the Visual Bible, image prompt, markdown, placeholders, brackets, or scene_description text.\n- Use concrete camera/subject movement, e.g. "Performer turns toward camera as fog rolls through stained glass."`,
         },
       ],
       format: storyboardSchema,
@@ -195,10 +188,13 @@ export async function POST(req: NextRequest) {
       throw new Error("Storyboard response did not include a frames array.");
     }
 
-    const frames = (plan.frames as StoryboardFrame[]).map((frame) =>
-      prependVisualBible(frame, visualBible)
-    );
+    const frames = (plan.frames as StoryboardFrame[]).map(normalizeFramePrompt);
     logStep("storyboard JSON complete", startedAt);
+
+    // Free VRAM before ComfyUI takes over — fire-and-forget, don't block the response.
+    client.generate({ model: MODEL, prompt: "", keep_alive: 0 }).catch((err: unknown) => {
+      console.warn("Ollama model unload failed (non-fatal)", err);
+    });
 
     return NextResponse.json({ artistContext, visualBible, frames });
   } catch (error) {
@@ -209,3 +205,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

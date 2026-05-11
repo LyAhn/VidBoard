@@ -17,6 +17,9 @@ export interface FramePlan {
 export interface FrameData extends FramePlan {
   startImageBase64?: string;
   endImageBase64?: string;
+  startPromptId?: string;
+  endPromptId?: string;
+  next_lyric_line?: string;
   isGenerating?: boolean;
   error?: string;
 }
@@ -51,4 +54,41 @@ export interface PlanResponsePayload {
   artistContext: string;
   visualBible: string;
   frames: FramePlan[];
+}
+
+export interface GenerateImageRequestPayload {
+  prompt: string;
+  aspectRatio: AspectRatio;
+  kind?: "start" | "end";
+  referenceImageBase64?: string | null;
+  initImageBase64?: string | null;
+  workflow?: string;
+}
+
+export interface GenerateImageResponsePayload {
+  imageBase64: string;
+  promptId: string;
+  workflow: string;
+}
+
+export type PromptStatusResponsePayload =
+  | { status: "done"; imageBase64: string; promptId: string }
+  | { status: "pending" }
+  | { status: "not_found" };
+
+export interface WorkflowInfoResponsePayload {
+  start: {
+    workflow: string;
+    capabilities: {
+      referenceImage: boolean;
+      initImage: boolean;
+    };
+  };
+  end: {
+    workflow: string;
+    capabilities: {
+      referenceImage: boolean;
+      initImage: boolean;
+    };
+  };
 }

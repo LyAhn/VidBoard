@@ -1,11 +1,17 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { PlaySquare } from "lucide-react";
+import { PlaySquare, Sparkles } from "lucide-react";
+import {
+  checkPromptStatus,
+  getWorkflowInfo,
+  requestGeneratedImage,
+} from "@/lib/api/generate-image";
 import { requestStoryboardPlan } from "@/lib/api/plan";
 import { exportStoryboardPdf } from "@/lib/export-pdf";
 import { exportStoryboardZip } from "@/lib/export-zip";
-import type { AppState } from "@/lib/vidboard-types";
+import { buildEndFramePrompt, buildStartFramePrompt } from "@/lib/storyboard-prompts";
+import type { AppState, FrameData } from "@/lib/vidboard-types";
 import { ArtistContextCard } from "@/components/ArtistContextCard";
 import { planningSteps } from "@/components/PlanningProgress";
 import { StoryboardGrid } from "@/components/StoryboardGrid";
@@ -132,6 +138,113 @@ export default function VidBoardApp() {
     }));
   };
 
+  const updateFrame = (idx: number, updates: Partial<FrameData>) => {
+    setState((prev) => ({
+      ...prev,
+      frames: prev.frames.map((frame, frameIdx) =>
+        frameIdx === idx ? { ...frame, ...updates } : frame
+      ),
+    }));
+  };
+
+  const generateFrameImages = async (
+    frames: FrameData[],
+    visualBible: string,
+    referenceImageBase64?: string | null
+  ) => {
+    if (!frames.length) return;
+
+    updateState({
+      isGeneratingImages: true,
+      statusMessage: "Checking image workflow...",
+      error: null,
+    });
+
+    const workflowInfo = await getWorkflowInfo();
+    if (referenceImageBase64 && !workflowInfo.start.capabilities.referenceImage) {
+      updateState({
+        isGeneratingImages: false,
+        statusMessage: null,
+        error: `The selected Start workflow "${workflowInfo.start.workflow}" cannot use the uploaded character reference image. Export a reference-capable Start workflow or remove the reference image.`,
+      });
+      return;
+    }
+
+    if (!workflowInfo.end.capabilities.initImage) {
+      updateState({
+        isGeneratingImages: false,
+        statusMessage: null,
+        error: `The selected End workflow "${workflowInfo.end.workflow}" cannot use Start frames for End-frame continuity. Export a reference/img2img workflow and set COMFYUI_END_WORKFLOW to it.`,
+      });
+      return;
+    }
+
+    if (referenceImageBase64 && !workflowInfo.end.capabilities.referenceImage) {
+      updateState({
+        isGeneratingImages: false,
+        statusMessage: null,
+        error: `The selected End workflow "${workflowInfo.end.workflow}" cannot use the uploaded character reference image. Export a reference-capable End workflow or remove the reference image.`,
+      });
+      return;
+    }
+
+    updateState({ statusMessage: "Generating frames..." });
+
+    for (let index = 0; index < frames.length; index++) {
+      const frame = frames[index];
+      if (frame.startImageBase64 && frame.endImageBase64 && !frame.error) {
+        continue;
+      }
+
+      const frameLabel = `Frame ${index + 1} of ${frames.length}`;
+      updateFrame(index, { isGenerating: true, error: undefined });
+
+      try {
+        const startedAt = Date.now();
+        const elapsedLabel = () => {
+          const secs = Math.floor((Date.now() - startedAt) / 1000);
+          return secs > 0 ? ` (${secs}s)` : "";
+        };
+
+        updateState({ statusMessage: `${frameLabel}: queuing start image...` });
+        const startData = await requestGeneratedImage({
+          prompt: buildStartFramePrompt(frame, visualBible),
+          kind: "start",
+          aspectRatio: state.aspectRatio,
+          referenceImageBase64,
+        });
+        updateFrame(index, {
+          startImageBase64: startData.imageBase64,
+          startPromptId: startData.promptId,
+        });
+
+        updateState({ statusMessage: `${frameLabel}: queuing end image${elapsedLabel()}...` });
+        const endData = await requestGeneratedImage({
+          prompt: buildEndFramePrompt(frame, visualBible),
+          kind: "end",
+          aspectRatio: state.aspectRatio,
+          referenceImageBase64,
+          initImageBase64: startData.imageBase64,
+        });
+        updateFrame(index, {
+          endImageBase64: endData.imageBase64,
+          endPromptId: endData.promptId,
+          isGenerating: false,
+        });
+      } catch (error) {
+        updateFrame(index, {
+          isGenerating: false,
+          error: error instanceof Error ? error.message : "Image generation failed.",
+        });
+      }
+    }
+
+    updateState({
+      isGeneratingImages: false,
+      statusMessage: null,
+    });
+  };
+
   const handleGenerate = async () => {
     if (!state.artistName || !state.trackTitle || !state.lyrics) {
       updateState({ error: "Please fill in artist name, track title, and lyrics." });
@@ -160,10 +273,15 @@ export default function VidBoardApp() {
         aspectRatio: state.aspectRatio,
       });
 
+      const plannedFrames = planData.frames.map((frame, index, frames) => ({
+        ...frame,
+        next_lyric_line: frames[index + 1]?.lyric_line,
+        isGenerating: false,
+      }));
       updateState({
         artistContext: planData.artistContext,
         visualBible: planData.visualBible,
-        frames: planData.frames.map((frame) => ({ ...frame, isGenerating: false })),
+        frames: plannedFrames,
         isPlanning: false,
         isGeneratingImages: false,
         statusMessage: null,
@@ -178,12 +296,67 @@ export default function VidBoardApp() {
     }
   };
 
+  const handleGenerateImages = async () => {
+    if (!state.visualBible || !state.frames.length) return;
+    await generateFrameImages(state.frames, state.visualBible, state.characterReferenceImage);
+  };
+
   const handleRetryImages = async () => {
-    updateState({
-      error: "Local AI backend not yet connected. See issues #2, #3, #4.",
-      isGeneratingImages: false,
-      statusMessage: null,
-    });
+    if (!state.visualBible || !state.frames.length) return;
+
+    updateState({ isGeneratingImages: true, statusMessage: "Checking previous jobs...", error: null });
+
+    const recoveredFrames = await Promise.all(
+      state.frames.map(async (frame) => {
+        if (!frame.error && frame.startImageBase64 && frame.endImageBase64) {
+          return frame;
+        }
+
+        let updated = { ...frame, error: undefined };
+
+        // Try to recover the start image from ComfyUI before re-queuing.
+        if (!updated.startImageBase64 && updated.startPromptId) {
+          try {
+            const result = await checkPromptStatus(updated.startPromptId);
+            if (result.status === "done") {
+              updated = { ...updated, startImageBase64: result.imageBase64 };
+            } else if (result.status === "pending") {
+              // Still running — leave promptId in place so generateFrameImages skips re-queue.
+              return { ...updated, isGenerating: false };
+            }
+          } catch {
+            // Status check failed — will re-queue below.
+          }
+        }
+
+        // Try to recover the end image from ComfyUI before re-queuing.
+        if (!updated.endImageBase64 && updated.endPromptId) {
+          try {
+            const result = await checkPromptStatus(updated.endPromptId);
+            if (result.status === "done") {
+              updated = { ...updated, endImageBase64: result.imageBase64 };
+            } else if (result.status === "pending") {
+              return { ...updated, isGenerating: false };
+            }
+          } catch {
+            // Status check failed — will re-queue below.
+          }
+        }
+
+        // Clear stale prompt IDs for images that still need generating.
+        return {
+          ...updated,
+          startImageBase64: updated.startImageBase64,
+          endImageBase64: updated.endImageBase64,
+          startPromptId: updated.startImageBase64 ? updated.startPromptId : undefined,
+          endPromptId: updated.endImageBase64 ? updated.endPromptId : undefined,
+          isGenerating: false,
+        };
+      })
+    );
+
+    updateState({ frames: recoveredFrames });
+    await generateFrameImages(recoveredFrames, state.visualBible, state.characterReferenceImage);
   };
 
   const copyFlowPrompts = async () => {
@@ -256,6 +429,28 @@ export default function VidBoardApp() {
                   Fill in the track details on the left and hit &quot;Generate Blueprint&quot; to
                   let AI plan your music video sequence.
                 </p>
+              </div>
+            )}
+
+          {state.frames.length > 0 &&
+            !state.isPlanning &&
+            !state.isGeneratingImages &&
+            !state.frames.some((f) => f.startImageBase64 || f.endImageBase64 || f.isGenerating) && (
+              <div className="rounded-xl border border-[#2a2a2a] bg-[#0d0d0d] p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-[#e5e5e5] mb-1">Blueprint ready</p>
+                  <p className="text-xs text-neutral-500 max-w-lg">
+                    Optionally add a character reference image in the Visual Bible above, then
+                    generate your frame images when ready.
+                  </p>
+                </div>
+                <button
+                  onClick={handleGenerateImages}
+                  className="shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white text-black text-sm font-semibold hover:bg-neutral-200 transition-colors"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Generate Images
+                </button>
               </div>
             )}
 
