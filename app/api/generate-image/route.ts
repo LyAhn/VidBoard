@@ -58,31 +58,6 @@ const ASPECT_SIZES: Record<AspectRatio, { width: number; height: number }> = {
   "1:1": { width: 1024, height: 1024 },
 };
 
-const NEGATIVE_PROMPT = [
-  "text",
-  "subtitles",
-  "captions",
-  "lyrics",
-  "lettering",
-  "logo",
-  "watermark",
-  "cartoon",
-  "illustration",
-  "anime",
-  "CGI",
-  "fantasy concept art",
-  "duplicated faces",
-  "deformed face",
-  "asymmetrical face",
-  "bad eyes",
-  "crossed eyes",
-  "distorted mouth",
-  "mutated hands",
-  "changed costume",
-  "changed instrument",
-  "inconsistent character identity",
-].join(", ");
-
 const isGenerateImageRequest = (value: unknown): value is GenerateImageRequestPayload => {
   if (!value || typeof value !== "object") return false;
   const data = value as Record<string, unknown>;
@@ -212,7 +187,11 @@ const injectWorkflowInputs = (
   setInputIfPresent(workflow, nodes.latent, "height", size.height);
   setInputIfPresent(workflow, nodes.latent, "batch_size", 1);
   setInputIfPresent(workflow, nodes.saveImage, "filename_prefix", "VidBoard/frame");
-  setInputIfPresent(workflow, nodes.negativePrompt, "text", NEGATIVE_PROMPT);
+  if (nodes.negativePrompt && workflow[nodes.negativePrompt]) {
+    // Only inject negative prompt for non-FLUX workflows that support CFG-based negative guidance.
+    // FLUX.1/2 family models use flow matching and ignore negative prompts — leave node unset.
+    console.log("Negative prompt node present in workflow but skipped — FLUX models do not support CFG negative guidance.");
+  }
 
   if (referenceFilename && nodes.referenceImage) {
     requireWorkflowNode(workflow, nodes.referenceImage, "reference image").inputs!.image =
