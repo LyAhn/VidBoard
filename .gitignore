@@ -8,3 +8,5 @@ coverage/
 comfyui/*.workflow.json
 !comfyui/*.workflow.example.json
 comfyui/workflows.json
+.claude/
+
