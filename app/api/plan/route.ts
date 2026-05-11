@@ -124,6 +124,7 @@ export async function POST(req: NextRequest) {
     const searchQuery = `${artistName} ${trackTitle} music video style genre aesthetics`;
     const startedAt = Date.now();
 
+    // Step 1: Web search
     console.log("Ollama planning: web search started", { query: searchQuery });
     const searchResults = await client.webSearch({
       query: searchQuery,
@@ -139,6 +140,7 @@ export async function POST(req: NextRequest) {
       .map(formatSearchResult)
       .join("\n\n");
 
+    // Step 1: Research — rich artist/track context guide
     console.log("Ollama planning: artist context started");
     const contextRes = await client.chat({
       model: MODEL,
@@ -147,13 +149,25 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "user",
-          content: `Using the following web search results, write a concise music video director's context guide for "${artistName}" - "${trackTitle}". Cover: genre, visual aesthetics, music video style, band members if relevant, and key visual themes.\n\nSearch results:\n${searchContext}`,
+          content: `Research the artist "${artistName}" and their track "${trackTitle}" using the web search results below.
+Provide a concise but detailed overview containing:
+- Genre, era, and core musical style.
+- Visual aesthetics associated with the artist (e.g. from existing music videos, live performances, album artwork).
+- Band members or key figures involved if relevant.
+- Common visual themes they rely on (recurring motifs, colour palettes, locations, styling).
+- Any notable directorial or cinematographic signatures from their video catalogue.
+
+Synthesize this into a structured context guide to inform the pre-production storyboard for a new music video for this track.
+
+Search results:
+${searchContext}`,
         },
       ],
     });
     const artistContext = contextRes.message.content;
     logStep("artist context complete", startedAt);
 
+    // Step 1.5: Visual Bible — locked production design document
     console.log("Ollama planning: visual bible started");
     const vbRes = await client.chat({
       model: MODEL,
@@ -162,13 +176,25 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "user",
-          content: `Based on this artist context:\n${artistContext}\n\nCreate a compact live-action Visual Bible for a "${artistName} - ${trackTitle}" music video. Theme: "${theme}".\nMust include:\n1. FIXED COLOUR GRADE: specific hex palette and overall colour mood.\n2. FIXED ENVIRONMENT ANCHOR: one repeatable location family, not one identical room for every shot.\n3. FIXED CHARACTER DESCRIPTION: detailed visual description of the main subject/artist appearance, wardrobe, hair, props, and instruments.\n4. REALISM LOCK: phrase the style as live-action cinematography, not illustration, fantasy concept art, anime, CGI, or album artwork.\n\nReturn one concise paragraph. Do not over-describe scene actions here; leave per-frame action to the storyboard.`,
+          content: `Based on the following artist context for "${artistName}" - "${trackTitle}", create a locked "Visual Bible" for a music video. Theme: "${theme}".
+
+This Visual Bible is a production design document that EVERY frame in the storyboard must adhere to. It must include:
+1. FIXED COLOUR GRADE: Specific hex palette (3–5 colours) and an overall colour mood description (e.g. "desaturated teal and amber, heavy shadows, cinematic 2.39:1 crop").
+2. FIXED ENVIRONMENT ANCHOR: One repeatable location family that all scenes inhabit or orbit (e.g. "all scenes occur in or around a derelict industrial warehouse at night"). Describe the environment with enough detail that an art director could dress the set.
+3. FIXED CHARACTER DESCRIPTION: Detailed visual description of the main subject/artist — face, build, hair colour and style, wardrobe including specific garment types, footwear, accessories, and any instruments or props they carry.
+4. REALISM LOCK: Explicitly state this is live-action cinematography — not illustration, fantasy concept art, anime, CGI, or album artwork.
+
+Return as one concise but information-dense summary paragraph. Do not describe frame-by-frame actions here; leave that to the storyboard.
+
+Artist context:
+${artistContext}`,
         },
       ],
     });
     const visualBible = vbRes.message.content;
     logStep("visual bible complete", startedAt);
 
+    // Step 2: Storyboard planning
     console.log("Ollama planning: storyboard JSON started");
     const planRes = await client.chat({
       model: MODEL,
@@ -177,7 +203,43 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: "user",
-          content: `You are an expert music video storyboard director. Plan a ${numberOfFrames}-frame storyboard for "${artistName} - ${trackTitle}".\nTheme: ${theme}. Aspect ratio: ${aspectRatio}.\n\nLocked Visual Bible:\n${visualBible}\n\nLyrics:\n${lyrics}\n\nDistribute frames across song structure (intro, verses, chorus, bridge, outro).\n\nRules:\n- Each frame must be visually distinct: vary shot scale, blocking, pose, foreground action, prop focus, and camera movement.\n- Keep character identity, wardrobe, instruments, environment family, and colour grade continuous across the whole storyboard.\n- image_prompt must be a frame-specific live-action photography prompt. It must not repeat the full Visual Bible verbatim.\n- image_prompt must describe only this shot's composition, subject action, foreground props, and camera placement.\n- image_prompt must not ask for visible text, captions, subtitles, lyrics, typography, signs, logos, labels, posters, or written words.\n- Avoid generic band-standing tableaux unless the lyric/section demands a performance shot.\n- flow_prompt must be only a short video motion instruction. Maximum 20 words.\n- flow_prompt must not include the Visual Bible, image prompt, markdown, placeholders, brackets, or scene_description text.\n- Use concrete camera/subject movement, e.g. "Performer turns toward camera as fog rolls through stained glass."`,
+          content: `You are an expert music video director and storyboard artist.
+Your task is to plan a storyboard sequence for a music video.
+
+Track Info:
+- Artist: ${artistName}
+- Track: ${trackTitle}
+- Target Theme/Mood: ${theme}
+- Aspect Ratio: ${aspectRatio}
+- Target Number of Frames: ${numberOfFrames}
+
+Artist Context & Vibe:
+${artistContext}
+
+Visual Bible Constraints (MUST inform every image_prompt):
+${visualBible}
+
+Lyrics:
+${lyrics}
+
+Create a structured storyboard plan with exactly ${numberOfFrames} frames distributed evenly across the song structure (e.g. intro, verses, chorus, bridge, outro).
+For each frame, provide:
+1. 'frame_number': Sequence number.
+2. 'timestamp_hint': Song section (e.g., 'Verse 1').
+3. 'lyric_line': The lyric line representing this frame.
+4. 'scene_description': Detailed visual description of what is happening in the shot.
+5. 'camera_angle': Camera angle or shot type (e.g. close-up, wide, dutch angle, POV).
+6. 'lighting': Lighting style (e.g. hard side-light, practical neon, golden hour).
+7. 'colour_palette': Specific colours dominant in this frame.
+8. 'motion_hint': Implied camera/subject movement for a video generation system.
+9. 'flow_prompt': A short, motion-optimised description in the format: "[Subject] [action verb] [direction/manner], [camera movement if any]". Maximum 20 words. Must be concrete and physical — no placeholders, no markdown, no brackets.
+10. 'image_prompt': A complete, self-contained generative AI image prompt for a text-to-image model. Must describe character details, environment, lighting, and style consistent with the Visual Bible. Must NOT repeat the full Visual Bible verbatim — instead, describe only this frame's specific composition, subject action, foreground props, and camera placement. Must not request visible text, captions, subtitles, lyrics, logos, or written words.
+11. 'character_present': Boolean true if the frame features the main human subject (artist/character).
+
+Rules:
+- Each frame must be visually distinct: vary shot scale, blocking, pose, foreground action, prop focus, and camera movement.
+- Keep character identity, wardrobe, instruments, environment family, and colour grade continuous across the whole storyboard.
+- Avoid generic band-standing tableaux unless the lyric/section specifically demands a performance shot.`,
         },
       ],
       format: storyboardSchema,
@@ -205,4 +267,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
