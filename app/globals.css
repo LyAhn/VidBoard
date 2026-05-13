@@ -5,6 +5,39 @@
   --color-glow-amber: rgba(255, 184, 0, 0.3);
 }
 
+@keyframes filmScroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.65); }
+}
+@keyframes amberGlow {
+  0%, 100% { box-shadow: 0 0 4px 1px rgba(251, 191, 36, 0.4); }
+  50% { box-shadow: 0 0 12px 3px rgba(251, 191, 36, 0.8); }
+}
+@keyframes waveBar {
+  0%, 100% { transform: scaleY(0.12); }
+  50% { transform: scaleY(1); }
+}
+@keyframes scanline {
+  from { top: -8%; }
+  to { top: 108%; }
+}
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@keyframes typeIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes stageSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @layer utilities {
   .glass {
     background: rgba(20, 20, 20, 0.7);
