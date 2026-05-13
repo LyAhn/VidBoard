@@ -5,6 +5,5 @@ coverage/
 *.log
 .env*
 !.env.example
-comfyui/*.workflow.json
-!comfyui/*.workflow.example.json
-comfyui/workflows.json
+comfyui/*.workflow.example.json
+next-env.d.ts

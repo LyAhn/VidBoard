@@ -1,0 +1,52 @@
+{
+  "defaultWorkflow": "flux2-klein-reference",
+  "workflows": {
+    "flux2-klein-txt2img": {
+      "file": "flux2-klein-txt2img.workflow.json",
+      "capabilities": {
+        "referenceImage": false,
+        "initImage": false
+      },
+      "nodes": {
+        "prompt": "6",
+        "seed": "15",
+        "scheduler": "16",
+        "latent": "17",
+        "saveImage": "21"
+      }
+    },
+    "flux2-klein-reference": {
+      "file": "flux2-klein-reference.workflow.json",
+      "capabilities": {
+        "referenceImage": true,
+        "initImage": false
+      },
+      "nodes": {
+        "prompt": "6",
+        "negativePrompt": "13",
+        "seed": "15",
+        "scheduler": "16",
+        "latent": "17",
+        "saveImage": "21",
+        "referenceImage": "8"
+      }
+    },
+    "flux2-klein-reference-img2img": {
+      "file": "flux2-klein-reference-img2img.workflow.json",
+      "capabilities": {
+        "referenceImage": true,
+        "initImage": true
+      },
+      "nodes": {
+        "prompt": "6",
+        "negativePrompt": "13",
+        "seed": "15",
+        "scheduler": "16",
+        "latent": "17",
+        "saveImage": "21",
+        "referenceImage": "8",
+        "initImage": "22"
+      }
+    }
+  }
+}
