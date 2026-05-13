@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { PlaySquare, Sparkles } from "lucide-react";
 import {
   checkPromptStatus,
+  freeComfyMemory,
   getWorkflowInfo,
   requestGeneratedImage,
 } from "@/lib/api/generate-image";
@@ -13,6 +14,11 @@ import { exportStoryboardZip } from "@/lib/export-zip";
 import { buildEndFramePrompt, buildStartFramePrompt } from "@/lib/storyboard-prompts";
 import type { AppState, FrameData } from "@/lib/vidboard-types";
 import { ArtistContextCard } from "@/components/ArtistContextCard";
+import {
+  CinematicLoader,
+  WaveformLoader,
+  DirectorLoader,
+} from "@/components/PlanningLoader";
 import { planningSteps } from "@/components/PlanningProgress";
 import { StoryboardGrid } from "@/components/StoryboardGrid";
 import { StoryboardToolbar } from "@/components/StoryboardToolbar";
@@ -170,24 +176,6 @@ export default function VidBoardApp() {
       return;
     }
 
-    if (!workflowInfo.end.capabilities.initImage) {
-      updateState({
-        isGeneratingImages: false,
-        statusMessage: null,
-        error: `The selected End workflow "${workflowInfo.end.workflow}" cannot use Start frames for End-frame continuity. Export a reference/img2img workflow and set COMFYUI_END_WORKFLOW to it.`,
-      });
-      return;
-    }
-
-    if (referenceImageBase64 && !workflowInfo.end.capabilities.referenceImage) {
-      updateState({
-        isGeneratingImages: false,
-        statusMessage: null,
-        error: `The selected End workflow "${workflowInfo.end.workflow}" cannot use the uploaded character reference image. Export a reference-capable End workflow or remove the reference image.`,
-      });
-      return;
-    }
-
     updateState({ statusMessage: "Generating frames..." });
 
     for (let index = 0; index < frames.length; index++) {
@@ -206,12 +194,20 @@ export default function VidBoardApp() {
           return secs > 0 ? ` (${secs}s)` : "";
         };
 
+        // Only pass the reference image for frames that actually feature the character.
+        const frameRef = frame.character_present ? referenceImageBase64 : undefined;
+        const startWorkflow = frame.character_present ? undefined : "flux2-klein-txt2img";
+        // End frames always use the reference workflow (never the img2img one — we no longer use
+        // the start frame as init conditioning; end frames are independent generations).
+        const endWorkflow = frame.character_present ? "flux2-klein-reference" : "flux2-klein-txt2img";
+
         updateState({ statusMessage: `${frameLabel}: queuing start image...` });
         const startData = await requestGeneratedImage({
           prompt: buildStartFramePrompt(frame, visualBible),
           kind: "start",
           aspectRatio: state.aspectRatio,
-          referenceImageBase64,
+          referenceImageBase64: frameRef,
+          workflow: startWorkflow,
         });
         updateFrame(index, {
           startImageBase64: startData.imageBase64,
@@ -223,8 +219,8 @@ export default function VidBoardApp() {
           prompt: buildEndFramePrompt(frame, visualBible),
           kind: "end",
           aspectRatio: state.aspectRatio,
-          referenceImageBase64,
-          initImageBase64: startData.imageBase64,
+          referenceImageBase64: frameRef,
+          workflow: endWorkflow,
         });
         updateFrame(index, {
           endImageBase64: endData.imageBase64,
@@ -238,6 +234,9 @@ export default function VidBoardApp() {
         });
       }
     }
+
+    // Free ComfyUI VRAM now that the storyboard run is complete — fire-and-forget.
+    freeComfyMemory().catch(() => undefined);
 
     updateState({
       isGeneratingImages: false,
@@ -400,6 +399,20 @@ export default function VidBoardApp() {
           onCopyFlowPrompts={copyFlowPrompts}
         />
 
+        {/* ── Planning loaders (shown in main area while AI works) ──────────────
+            Switch the active variant by swapping which line is uncommented:
+              <CinematicLoader …/>  — Variant A: scrolling film strip + progress rail
+              <WaveformLoader …/>   — Variant B: audio-visualiser bars + stage dots
+              <DirectorLoader …/>   — Variant C: CRT terminal monitor log
+        ──────────────────────────────────────────────────────────────────── */}
+        {state.isPlanning && (
+          <div className="flex-1 flex items-center justify-center">
+            <CinematicLoader elapsed={planningElapsed} stepIndex={planningStepIndex} />
+            {/* <WaveformLoader elapsed={planningElapsed} stepIndex={planningStepIndex} /> */}
+            {/* <DirectorLoader elapsed={planningElapsed} stepIndex={planningStepIndex} /> */}
+          </div>
+        )}
+
         <div className="p-8 max-w-7xl mx-auto w-full space-y-12 pb-24">
           {state.error && (
             <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-sm">
@@ -408,7 +421,7 @@ export default function VidBoardApp() {
             </div>
           )}
 
-          {state.artistContext && <ArtistContextCard artistContext={state.artistContext} />}
+          {state.artistContext && !state.isPlanning && <ArtistContextCard artistContext={state.artistContext} />}
 
           {state.visualBible && (
             <VisualBibleCard

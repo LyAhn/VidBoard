@@ -84,9 +84,11 @@ export const buildStartFramePrompt = (frame: FrameData, visualBible: string) =>
 export const buildEndFramePrompt = (frame: FrameData, visualBible: string) =>
   [
     buildSharedPrompt(frame, visualBible),
-    `End frame of the same shot, a few seconds later. Visible motion: ${cleanPrompt(frame.flow_prompt)}.`,
+    `End frame: the concluded state of this scene after the motion has played out. ${cleanPrompt(frame.flow_prompt)}.`,
     lyricMood(frame.next_lyric_line || frame.lyric_line),
-    "Continuity with Start frame required. Change at least two visible elements in a physically plausible way: pose, hand position, prop placement, focus plane, foreground particles, or light direction. Same character identity, costume, instrument, and environment.",
+    frame.character_present
+      ? "If a character reference image is provided, match the reference identity and wardrobe exactly. Subject has reached the final pose of this motion — position, eyeline, and hand placement should reflect the end of the action."
+      : "No human subject. Pure environment, atmosphere, or object focus at the conclusion of the described motion.",
   ]
     .filter(Boolean)
     .join(" ");

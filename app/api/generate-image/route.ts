@@ -410,6 +410,40 @@ export async function POST(req: NextRequest) {
 }
 
 /**
+ * DELETE /api/generate-image
+ *
+ * Instructs ComfyUI to unload all models from VRAM and free GPU memory.
+ * Call this after a storyboard generation run is fully complete.
+ * Non-fatal — a failure here does not affect already-generated images.
+ */
+export async function DELETE() {
+  try {
+    await ensureComfyReachable();
+    const response = await fetchWithTimeout(
+      `${COMFYUI_BASE_URL}/free`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unload_models: true, free_memory: true }),
+      },
+      CONNECTION_TIMEOUT_MS
+    );
+
+    if (!response.ok) {
+      throw new Error(`ComfyUI /free responded with HTTP ${response.status}`);
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.warn("ComfyUI VRAM free failed (non-fatal)", error);
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
  * GET /api/generate-image?promptId=<id>
  *
  * Checks a previously queued ComfyUI job by its prompt ID.
