@@ -1,3 +1,5 @@
+// IMPORTANT: Never call COMFYUI_BASE_URL directly from client code.
+// All image generation must go via /api/generate-image.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
@@ -284,8 +286,16 @@ const queueWorkflow = async (workflow: Record<string, unknown>) => {
 
   const data = await response.json();
   if (!response.ok) {
+    const parts: string[] = [];
+    if (data.error?.message) parts.push(data.error.message);
+    if (data.error?.details) parts.push(data.error.details);
+    if (data.node_errors && typeof data.node_errors === "object") {
+      const nodeMessages = Object.values(data.node_errors as Record<string, { class_type?: string; errors?: Array<{ message?: string }> }>)
+        .flatMap((n) => (n.errors ?? []).map((e) => `${n.class_type ?? "node"}: ${e.message ?? "unknown"}`));
+      if (nodeMessages.length) parts.push(nodeMessages.join("; "));
+    }
     throw new Error(
-      `ComfyUI workflow validation failed: ${data.error?.message || JSON.stringify(data)}`
+      `ComfyUI workflow validation failed: ${parts.length ? parts.join(" — ") : JSON.stringify(data)}`
     );
   }
 
@@ -353,6 +363,18 @@ const pollForImage = async (promptId: string) => {
   throw new Error(`ComfyUI generation timed out after ${GENERATION_TIMEOUT_MS / 1000}s.`);
 };
 
+const classifyComfyError = (error: unknown): string => {
+  if (!(error instanceof Error)) return "Failed to generate image.";
+  const msg = error.message;
+  if (msg.includes("not reachable")) {
+    return `ComfyUI is not running. Start it with: python main.py --listen`;
+  }
+  if (msg.includes("timed out")) {
+    return `Frame generation timed out. Check ComfyUI's queue at ${COMFYUI_BASE_URL}.`;
+  }
+  return msg;
+};
+
 const downloadImageAsBase64 = async (image: ComfyImageOutput) => {
   const params = new URLSearchParams({
     filename: image.filename,
@@ -406,10 +428,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ imageBase64, promptId, workflow: workflowName });
   } catch (error) {
     console.error("ComfyUI generation failed", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to generate image." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: classifyComfyError(error) }, { status: 500 });
   }
 }
 

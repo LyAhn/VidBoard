@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { ChevronDown, ChevronRight, Copy, ImageIcon, Loader2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Copy, ImageIcon, Loader2 } from "lucide-react";
 import type { AspectRatio, FrameData } from "@/lib/vidboard-types";
 
 interface StoryboardGridProps {
@@ -45,8 +45,12 @@ const FrameImageState = ({
         unoptimized
       />
     ) : error ? (
-      <div className="absolute inset-0 flex items-center justify-center bg-red-500/5 text-red-500 p-2 text-[10px]">
-        Failed
+      <div
+        className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-red-950/40 text-red-400 p-3 text-[9px]"
+        title={error}
+      >
+        <AlertTriangle className="w-4 h-4 shrink-0 text-red-500" />
+        <span className="text-center leading-tight line-clamp-4 break-words">{error}</span>
       </div>
     ) : isGenerating ? (
       <div className="absolute inset-0 flex items-center justify-center bg-neutral-900/50">
