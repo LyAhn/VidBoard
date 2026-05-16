@@ -17,10 +17,18 @@ export function useServiceHealth(intervalMs = 30_000): ServiceHealth {
 
   useEffect(() => {
     let cancelled = false;
+    let inFlight = false;
+    let controller: AbortController | null = null;
 
     const check = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      controller = new AbortController();
       try {
-        const res = await fetch("/api/health");
+        const res = await fetch("/api/health", {
+          signal: controller.signal,
+          cache: "no-store",
+        });
         if (cancelled) return;
         if (res.ok) {
           const data = (await res.json()) as { ollama: string; comfyui: string };
@@ -33,13 +41,16 @@ export function useServiceHealth(intervalMs = 30_000): ServiceHealth {
         }
       } catch {
         if (!cancelled) setHealth({ ollama: "offline", comfyui: "offline" });
+      } finally {
+        inFlight = false;
       }
     };
 
     void check();
-    const timer = window.setInterval(check, intervalMs);
+    const timer = window.setInterval(() => void check(), intervalMs);
     return () => {
       cancelled = true;
+      controller?.abort();
       clearInterval(timer);
     };
   }, [intervalMs]);
