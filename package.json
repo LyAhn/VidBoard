@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "clean": "node -e \"require('fs').rmSync('.next', {recursive:true,force:true})\"",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "map-workflow": "node scripts/map-workflow.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
