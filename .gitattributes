@@ -1,0 +1,14 @@
+# Normalize line endings to LF on commit
+* text=auto eol=lf
+
+# Explicitly text files
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js   text eol=lf
+*.mjs  text eol=lf
+*.json text eol=lf
+*.css  text eol=lf
+*.md   text eol=lf
+
+# Lock files — treat as binary to avoid spurious merge conflicts
+pnpm-lock.yaml binary
