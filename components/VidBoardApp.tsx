@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { PlaySquare, Sparkles } from "lucide-react";
 import {
   checkPromptStatus,
+  freeComfyMemory,
   getWorkflowInfo,
   requestGeneratedImage,
 } from "@/lib/api/generate-image";
@@ -13,6 +14,7 @@ import { exportStoryboardZip } from "@/lib/export-zip";
 import { buildEndFramePrompt, buildStartFramePrompt } from "@/lib/storyboard-prompts";
 import type { AppState, FrameData } from "@/lib/vidboard-types";
 import { ArtistContextCard } from "@/components/ArtistContextCard";
+import { CinematicLoader } from "@/components/PlanningLoader";
 import { planningSteps } from "@/components/PlanningProgress";
 import { StoryboardGrid } from "@/components/StoryboardGrid";
 import { StoryboardToolbar } from "@/components/StoryboardToolbar";
@@ -24,6 +26,8 @@ const initialState: AppState = {
   trackTitle: "",
   lyrics: "",
   theme: "",
+  visualDirection: "lyrics",
+  visualConcept: "",
   numberOfFrames: 8,
   aspectRatio: "16:9",
   artistContext: null,
@@ -64,6 +68,10 @@ export default function VidBoardApp() {
             trackTitle: parsed.trackTitle || "",
             lyrics: parsed.lyrics || "",
             theme: parsed.theme || "",
+            visualDirection: ["artist", "lyrics", "theme"].includes(parsed.visualDirection)
+              ? parsed.visualDirection
+              : "lyrics",
+            visualConcept: parsed.visualConcept || "",
             numberOfFrames: parsed.numberOfFrames || 8,
             aspectRatio: parsed.aspectRatio || "16:9",
           }));
@@ -90,6 +98,8 @@ export default function VidBoardApp() {
       trackTitle: state.trackTitle,
       lyrics: state.lyrics,
       theme: state.theme,
+      visualDirection: state.visualDirection,
+      visualConcept: state.visualConcept,
       numberOfFrames: state.numberOfFrames,
       aspectRatio: state.aspectRatio,
       artistContext: state.artistContext,
@@ -111,6 +121,8 @@ export default function VidBoardApp() {
     state.trackTitle,
     state.lyrics,
     state.theme,
+    state.visualDirection,
+    state.visualConcept,
     state.numberOfFrames,
     state.aspectRatio,
     state.artistContext,
@@ -170,24 +182,6 @@ export default function VidBoardApp() {
       return;
     }
 
-    if (!workflowInfo.end.capabilities.initImage) {
-      updateState({
-        isGeneratingImages: false,
-        statusMessage: null,
-        error: `The selected End workflow "${workflowInfo.end.workflow}" cannot use Start frames for End-frame continuity. Export a reference/img2img workflow and set COMFYUI_END_WORKFLOW to it.`,
-      });
-      return;
-    }
-
-    if (referenceImageBase64 && !workflowInfo.end.capabilities.referenceImage) {
-      updateState({
-        isGeneratingImages: false,
-        statusMessage: null,
-        error: `The selected End workflow "${workflowInfo.end.workflow}" cannot use the uploaded character reference image. Export a reference-capable End workflow or remove the reference image.`,
-      });
-      return;
-    }
-
     updateState({ statusMessage: "Generating frames..." });
 
     for (let index = 0; index < frames.length; index++) {
@@ -206,12 +200,18 @@ export default function VidBoardApp() {
           return secs > 0 ? ` (${secs}s)` : "";
         };
 
+        const useReferenceWorkflow = frame.character_present && Boolean(referenceImageBase64);
+        const frameRef = useReferenceWorkflow ? referenceImageBase64 : undefined;
+        const startWorkflow = useReferenceWorkflow ? undefined : "flux2-klein-txt2img";
+        const endWorkflow = useReferenceWorkflow ? "flux2-klein-reference" : "flux2-klein-txt2img";
+
         updateState({ statusMessage: `${frameLabel}: queuing start image...` });
         const startData = await requestGeneratedImage({
           prompt: buildStartFramePrompt(frame, visualBible),
           kind: "start",
           aspectRatio: state.aspectRatio,
-          referenceImageBase64,
+          referenceImageBase64: frameRef,
+          workflow: startWorkflow,
         });
         updateFrame(index, {
           startImageBase64: startData.imageBase64,
@@ -223,8 +223,8 @@ export default function VidBoardApp() {
           prompt: buildEndFramePrompt(frame, visualBible),
           kind: "end",
           aspectRatio: state.aspectRatio,
-          referenceImageBase64,
-          initImageBase64: startData.imageBase64,
+          referenceImageBase64: frameRef,
+          workflow: endWorkflow,
         });
         updateFrame(index, {
           endImageBase64: endData.imageBase64,
@@ -239,6 +239,9 @@ export default function VidBoardApp() {
       }
     }
 
+    // Free ComfyUI VRAM now that the storyboard run is complete — fire-and-forget.
+    freeComfyMemory().catch(() => undefined);
+
     updateState({
       isGeneratingImages: false,
       statusMessage: null,
@@ -246,8 +249,13 @@ export default function VidBoardApp() {
   };
 
   const handleGenerate = async () => {
-    if (!state.artistName || !state.trackTitle || !state.lyrics) {
-      updateState({ error: "Please fill in artist name, track title, and lyrics." });
+    const hasLyrics = state.lyrics.trim().length > 0;
+    const hasVisualConcept = state.visualConcept.trim().length > 0;
+    if (!state.artistName || !state.trackTitle || (!hasLyrics && !hasVisualConcept)) {
+      updateState({
+        error:
+          "Please fill in artist name, track title, and either lyrics or a visual concept for instrumental tracks.",
+      });
       return;
     }
 
@@ -269,6 +277,8 @@ export default function VidBoardApp() {
         trackTitle: state.trackTitle,
         lyrics: state.lyrics,
         theme: state.theme,
+        visualDirection: state.visualDirection,
+        visualConcept: state.visualConcept,
         numberOfFrames: state.numberOfFrames,
         aspectRatio: state.aspectRatio,
       });
@@ -400,6 +410,12 @@ export default function VidBoardApp() {
           onCopyFlowPrompts={copyFlowPrompts}
         />
 
+        {state.isPlanning && (
+          <div className="flex-1 flex items-center justify-center">
+            <CinematicLoader elapsed={planningElapsed} stepIndex={planningStepIndex} />
+          </div>
+        )}
+
         <div className="p-8 max-w-7xl mx-auto w-full space-y-12 pb-24">
           {state.error && (
             <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 rounded-lg text-sm">
@@ -408,7 +424,7 @@ export default function VidBoardApp() {
             </div>
           )}
 
-          {state.artistContext && <ArtistContextCard artistContext={state.artistContext} />}
+          {state.artistContext && !state.isPlanning && <ArtistContextCard artistContext={state.artistContext} />}
 
           {state.visualBible && (
             <VisualBibleCard

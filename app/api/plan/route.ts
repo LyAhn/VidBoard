@@ -5,11 +5,15 @@ export const runtime = "nodejs";
 
 type AspectRatio = "16:9" | "9:16" | "1:1";
 
+type VisualDirection = "artist" | "lyrics" | "theme";
+
 interface PlanRequest {
   artistName: string;
   trackTitle: string;
   lyrics: string;
   theme: string;
+  visualDirection: VisualDirection;
+  visualConcept: string;
   numberOfFrames: number;
   aspectRatio: AspectRatio;
 }
@@ -90,6 +94,37 @@ const isPlanRequest = (value: unknown): value is PlanRequest => {
   );
 };
 
+const normalisePlanRequest = (body: Record<string, unknown>): PlanRequest => ({
+  artistName: String(body.artistName ?? ""),
+  trackTitle: String(body.trackTitle ?? ""),
+  lyrics: String(body.lyrics ?? ""),
+  theme: String(body.theme ?? ""),
+  visualDirection: (["artist", "lyrics", "theme"] as VisualDirection[]).includes(
+    body.visualDirection as VisualDirection
+  )
+    ? (body.visualDirection as VisualDirection)
+    : "lyrics",
+  visualConcept: typeof body.visualConcept === "string" ? body.visualConcept : "",
+  numberOfFrames: (() => {
+    const raw = Number(body.numberOfFrames);
+    return Number.isFinite(raw) ? Math.min(16, Math.max(4, Math.round(raw))) : 8;
+  })(),
+  aspectRatio: body.aspectRatio as AspectRatio,
+});
+
+const buildVisualDirectionInstruction = (
+  direction: VisualDirection,
+  theme: string
+): string => {
+  if (direction === "theme") {
+    return `The user-defined theme ("${theme}") MUST dominate the entire visual design. Use the artist context only to accurately describe the performer's physical appearance and wardrobe — do NOT let the artist's established setting, location aesthetic, or recurring visual motifs dictate the environment or atmosphere. The theme takes full precedence.`;
+  }
+  if (direction === "lyrics") {
+    return `Draw visual inspiration primarily from the specific imagery and emotions of this track's lyrics. Be creative and song-specific — do NOT default to the artist's most familiar or commonly associated visual clichés. The Visual Bible should feel specific to this song, not to the artist's broader catalogue.`;
+  }
+  return `Draw from the artist's established visual identity, recurring motifs, and aesthetic signatures to create a Visual Bible consistent with their catalogue.`;
+};
+
 const formatSearchResult = (result: SearchResult) => {
   const heading = result.title || result.url || "Search result";
   return `[${heading}]\n${result.content}`;
@@ -115,12 +150,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
-    if (!isPlanRequest(body)) {
+    const rawBody = await req.json();
+    if (!isPlanRequest(rawBody)) {
       return NextResponse.json({ error: "Invalid planning request." }, { status: 400 });
     }
+    const body = normalisePlanRequest(rawBody as unknown as Record<string, unknown>);
 
-    const { artistName, trackTitle, lyrics, theme, numberOfFrames, aspectRatio } = body;
+    const { artistName, trackTitle, lyrics, theme, visualDirection, visualConcept, numberOfFrames, aspectRatio } = body;
+    const isInstrumental = !lyrics.trim();
+    const lyricExcerpt = lyrics.slice(0, 600).trim();
+    const lyricsOrConcept = isInstrumental
+      ? visualConcept.trim()
+        ? `Visual Concept / Arc (Instrumental):\n${visualConcept.trim()}`
+        : "This is an instrumental track with no lyrics."
+      : `Lyrics (excerpt — use to anchor visual imagery to this specific song):\n${lyricExcerpt}${lyrics.length > 600 ? "\n[…]" : ""}`;
     const searchQuery = `${artistName} ${trackTitle} music video style genre aesthetics`;
     const startedAt = Date.now();
 
@@ -150,17 +193,17 @@ export async function POST(req: NextRequest) {
         {
           role: "user",
           content: `Research the artist "${artistName}" and their track "${trackTitle}" using the web search results below.
-Provide a concise but detailed overview containing:
-- Genre, era, and core musical style.
-- Visual aesthetics associated with the artist (e.g. from existing music videos, live performances, album artwork).
-- Band members or key figures involved if relevant.
-- Common visual themes they rely on (recurring motifs, colour palettes, locations, styling).
-- Any notable directorial or cinematographic signatures from their video catalogue.
 
-Synthesize this into a structured context guide to inform the pre-production storyboard for a new music video for this track.
+Provide a concise but detailed overview containing:
+1. PERFORMER DESCRIPTION: Physical appearance of the main performer(s) — face, build, hair, typical wardrobe style, any signature instruments or accessories. Be specific enough for a costume designer to recreate the look.
+2. MUSICAL STYLE: Genre, era, tempo/energy character of the track (e.g. slow-burn, aggressive, anthemic).
+3. SONG-SPECIFIC CONTENT: Based on the track title and any lyric references found, what is this specific song actually ABOUT? What emotions, narrative, or imagery does it describe? (Do not confuse the band's general genre identity with what this particular song communicates.)
+4. CATALOGUE AESTHETIC: What visual settings and motifs appear in this artist's existing videos — note these clearly so they can be considered or deliberately avoided.
 
 Search results:
-${searchContext}`,
+${searchContext}
+
+${!isInstrumental ? `Track lyrics for reference:\n${lyricExcerpt}${lyrics.length > 600 ? "\n[…]" : ""}` : visualConcept ? `Visual concept for this instrumental: ${visualConcept}` : ""}`,
         },
       ],
     });
@@ -176,18 +219,39 @@ ${searchContext}`,
       messages: [
         {
           role: "user",
-          content: `Based on the following artist context for "${artistName}" - "${trackTitle}", create a locked "Visual Bible" for a music video. Theme: "${theme}".
+          content: `You are a music video production designer. Create a locked "Visual Bible" for "${artistName}" — "${trackTitle}".
 
-This Visual Bible is a production design document that EVERY frame in the storyboard must adhere to. It must include:
-1. FIXED COLOUR GRADE: Specific hex palette (3–5 colours) and an overall colour mood description (e.g. "desaturated teal and amber, heavy shadows, cinematic 2.39:1 crop").
-2. FIXED ENVIRONMENT ANCHOR: One repeatable location family that all scenes inhabit or orbit (e.g. "all scenes occur in or around a derelict industrial warehouse at night"). Describe the environment with enough detail that an art director could dress the set.
-3. FIXED CHARACTER DESCRIPTION: Detailed visual description of the main subject/artist — face, build, hair colour and style, wardrobe including specific garment types, footwear, accessories, and any instruments or props they carry.
-4. REALISM LOCK: Explicitly state this is live-action cinematography — not illustration, fantasy concept art, anime, CGI, or album artwork.
+━━━ VISUAL DIRECTION ━━━
+${buildVisualDirectionInstruction(visualDirection, theme)}
+User Theme / Mood: "${theme || "not specified"}"
 
-Return as one concise but information-dense summary paragraph. Do not describe frame-by-frame actions here; leave that to the storyboard.
+━━━ SONG CONTENT ━━━
+${lyricsOrConcept}
 
-Artist context:
-${artistContext}`,
+━━━ ARTIST CONTEXT (use only what is instructed below) ━━━
+${artistContext}
+
+━━━ INSTRUCTIONS ━━━
+The Visual Bible has TWO sources of truth. You must keep them strictly separate:
+
+SOURCE A — CHARACTER (from artist context only):
+Extract ONLY: performer's physical appearance, hair, wardrobe specifics, instruments, accessories. This is the only thing the artist context should contribute.
+
+SOURCE B — ENVIRONMENT & ATMOSPHERE (from lyrics/theme ONLY — NOT from artist context):
+Derive the location, setting, colour palette, and mood from the song's lyrics and the user's theme above.
+${
+  visualDirection !== "artist"
+    ? `CRITICAL: Do NOT carry over any location, setting, or atmosphere from the artist's existing video catalogue or genre conventions into Source B. The environment must come from what the lyrics describe or imply, and from the user's theme. If the artist is associated with a particular genre's typical visual clichés (e.g. religious settings for Christian metal, forest scenes for folk metal, cityscapes for hip-hop), you must set those aside entirely unless a lyric line specifically places the scene there.`
+    : `You may draw on the artist's established visual settings and motifs for the environment.`
+}
+
+Build the Visual Bible with:
+1. FIXED COLOUR GRADE: Hex palette (3–5 colours) derived from the mood/lyrics/theme. Overall colour description.
+2. FIXED ENVIRONMENT: One location family derived from the song content and theme — not the artist's typical setting. Enough detail for an art director to dress the set.
+3. FIXED CHARACTER: Full visual description from Source A (appearance, wardrobe, instruments).
+4. REALISM LOCK: Live-action cinematography only — no illustration, CGI, anime, or fantasy concept art.
+
+Return as one concise, information-dense paragraph. No frame-by-frame description.`,
         },
       ],
     });
@@ -210,6 +274,7 @@ Track Info:
 - Artist: ${artistName}
 - Track: ${trackTitle}
 - Target Theme/Mood: ${theme}
+- Visual Direction: ${visualDirection === "artist" ? "Match artist's established aesthetic" : visualDirection === "lyrics" ? "Imagery driven by this track's specific lyrics — avoid generic artist clichés" : "User theme dominates — override artist's typical look"}
 - Aspect Ratio: ${aspectRatio}
 - Target Number of Frames: ${numberOfFrames}
 
@@ -219,14 +284,22 @@ ${artistContext}
 Visual Bible Constraints (MUST inform every image_prompt):
 ${visualBible}
 
-Lyrics:
+${
+  isInstrumental
+    ? `${lyricsOrConcept}
+
+Since this is an instrumental track, distribute frames across an emotional arc (e.g. build, peak, release, resolution). Set 'lyric_line' to an evocative phrase describing the musical energy or emotion at that moment rather than literal lyrics.`
+    : `Lyrics:
 ${lyrics}
+
+For each frame, anchor the 'image_prompt' to the specific imagery and emotion evoked by the assigned 'lyric_line'. Do not use generic artist-identity visuals when the lyric suggests something more specific or unexpected.`
+}
 
 Create a structured storyboard plan with exactly ${numberOfFrames} frames distributed evenly across the song structure (e.g. intro, verses, chorus, bridge, outro).
 For each frame, provide:
 1. 'frame_number': Sequence number.
 2. 'timestamp_hint': Song section (e.g., 'Verse 1').
-3. 'lyric_line': The lyric line representing this frame.
+3. 'lyric_line': The lyric line representing this frame${isInstrumental ? " (or a phrase capturing the musical energy at this moment)" : ""}.
 4. 'scene_description': Detailed visual description of what is happening in the shot.
 5. 'camera_angle': Camera angle or shot type (e.g. close-up, wide, dutch angle, POV).
 6. 'lighting': Lighting style (e.g. hard side-light, practical neon, golden hour).
@@ -239,7 +312,8 @@ For each frame, provide:
 Rules:
 - Each frame must be visually distinct: vary shot scale, blocking, pose, foreground action, prop focus, and camera movement.
 - Keep character identity, wardrobe, instruments, environment family, and colour grade continuous across the whole storyboard.
-- Avoid generic band-standing tableaux unless the lyric/section specifically demands a performance shot.`,
+- Avoid generic band-standing tableaux unless the lyric/section specifically demands a performance shot.
+- If Visual Direction is lyrics-led or theme-led, treat the Visual Bible environment as a creative canvas — vary lighting, props, and framing to serve the lyric/mood rather than repeating a static scene.`,
         },
       ],
       format: storyboardSchema,
@@ -251,6 +325,9 @@ Rules:
     }
 
     const frames = (plan.frames as StoryboardFrame[]).map(normalizeFramePrompt);
+    if (frames.length !== numberOfFrames) {
+      throw new Error(`Storyboard returned ${frames.length} frames; expected ${numberOfFrames}.`);
+    }
     logStep("storyboard JSON complete", startedAt);
 
     // Free VRAM before ComfyUI takes over — fire-and-forget, don't block the response.

@@ -1,5 +1,5 @@
 import { Activity, Loader2 } from "lucide-react";
-import type { AppState, AspectRatio } from "@/lib/vidboard-types";
+import type { AppState, AspectRatio, VisualDirection } from "@/lib/vidboard-types";
 import { PlanningProgress } from "@/components/PlanningProgress";
 
 interface VidBoardSidebarProps {
@@ -64,8 +64,52 @@ export function VidBoardSidebar({
               className="w-full bg-[#151515] border border-[#222] rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition-colors"
               placeholder="e.g. dark and ethereal, euphoric"
             />
-            <p className="text-[9px] text-gray-500 italic">e.g. dark and ethereal, euphoric</p>
           </div>
+          <div className="space-y-1">
+            <label className="input-label">Visual Direction</label>
+            <div className="grid grid-cols-3 gap-1" role="radiogroup" aria-label="Visual Direction">
+              {(
+                [
+                  { value: "artist", label: "Artist Look" },
+                  { value: "lyrics", label: "Lyrics-Led" },
+                  { value: "theme", label: "Theme-Led" },
+                ] as { value: VisualDirection; label: string }[]
+              ).map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={state.visualDirection === value}
+                  onClick={() => updateState({ visualDirection: value })}
+                  className={`py-1.5 rounded text-[10px] font-semibold uppercase tracking-wide border transition-colors ${
+                    state.visualDirection === value
+                      ? "bg-amber-500 border-amber-500 text-black"
+                      : "bg-[#151515] border-[#222] text-gray-400 hover:border-amber-500/50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[9px] text-gray-500 italic">
+              {state.visualDirection === "artist" && "Match the artist's existing visual identity"}
+              {state.visualDirection === "lyrics" && "Imagery driven by this track's specific lyrics"}
+              {state.visualDirection === "theme" && "Your theme overrides the artist's typical look"}
+            </p>
+          </div>
+          {!state.lyrics.trim() && (
+            <div className="space-y-1">
+              <label className="input-label">Visual Concept / Arc</label>
+              <textarea
+                value={state.visualConcept}
+                onChange={(e) => updateState({ visualConcept: e.target.value })}
+                rows={4}
+                className="w-full bg-[#151515] border border-amber-500/30 rounded px-3 py-2 text-xs focus:outline-none focus:border-amber-500 transition-colors resize-none font-mono"
+                placeholder="Instrumental track — describe the emotional journey or visual narrative (e.g. builds from desolate emptiness to euphoric release, urban nightscapes, fragmented memories)"
+              />
+              <p className="text-[9px] text-gray-500 italic">Replaces lyrics for instrumental tracks</p>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-4">

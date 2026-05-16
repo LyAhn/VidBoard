@@ -1,4 +1,5 @@
 export type AspectRatio = "16:9" | "9:16" | "1:1";
+export type VisualDirection = "artist" | "lyrics" | "theme";
 
 export interface FramePlan {
   frame_number: number;
@@ -29,6 +30,8 @@ export interface AppState {
   trackTitle: string;
   lyrics: string;
   theme: string;
+  visualDirection: VisualDirection;
+  visualConcept: string;
   numberOfFrames: number;
   aspectRatio: AspectRatio;
   artistContext: string | null;
@@ -46,6 +49,8 @@ export interface PlanRequestPayload {
   trackTitle: string;
   lyrics: string;
   theme: string;
+  visualDirection: VisualDirection;
+  visualConcept: string;
   numberOfFrames: number;
   aspectRatio: AspectRatio;
 }

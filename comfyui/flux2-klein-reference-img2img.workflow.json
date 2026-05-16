@@ -1,0 +1,309 @@
+{
+  "3": {
+    "inputs": {
+      "unet_name": "flux-2-klein-4b-fp8.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "4": {
+    "inputs": {
+      "clip_name": "qwen_3_4b.safetensors",
+      "type": "flux2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "5": {
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "## Visual Bible: Brotality - \"The Bones Of God\" (Psychedelic Interpretation)\n\n**Fixed Colour Grade:** The palette will be a high-contrast desaturation, moving from deep, bruised indigos and muddy sepia tones ($\\#2C003E$, $\\#5B432D$) in the \"descent\" sections, gradually washing out towards ethereal, glowing cyan and pale gold ($\\#B3E0FF$, $\\#FFD700$) during the \"ascent\" and climax, maintaining a grainy, overexposed quality throughout. **Fixed Environment Anchor:** All action is staged within the ruins of a colossal, overgrown, and partially subterranean Beaux-Arts library, now reclaimed by aggressive, luminous jungle flora. **Fixed Character Description:** The band members are presented as figures of intense, almost ritualistic devotion; their stage attire blends highly textured, distressed black leather and heavy velvet (evoking old-world decadence) with accents of tarnished, etched brass hardware. Their performance energy should feel less like a concert and more like a psychedelic exorcism, where raw power is channeled through elaborate, almost spiritual physicality.\n\nVisual Bible: Brotality - \"The Bones Of God\" (Psychedelic Interpretation). Fixed Colour Grade: The palette will be a high-contrast desaturation, moving from deep, bruised indigos and muddy sepia tones ($\\#2C003E$, $\\#5B432D$) in the \"descent\" sections, gradually washing out towards ethereal, glowing cyan and pale gold ($\\#B3E0FF$, $\\#FFD700$) during the \"ascent\" and climax, maintaining a grainy, overexposed quality throughout. Fixed Environment Anchor: All action is staged within the ruins of a colossal, overgrown, and partially subterranean Beaux-Arts library, now reclaimed by aggressive, luminous jungle flora. Fixed Character Description: The band members are presented as figures of intense, almost ritualistic devotion; their stage attire blends highly textured, distressed black leather and heavy velvet (evoking old-world decadence) with accents of tarnished, etched brass hardware. Their performance energy should feel less like a concert and more like a psychedelic exorcism, where raw power is channeled through elaborate, almost spiritual physicality. A wide, slow pan reveals the band members amidst massive, carnivorous-looking jungle flora that frames the ruins of the Beaux-Arts library. The light is trapped in deep shadows and bruised indigo hues. Cinematic, 16:9, grainy film quality.",
+      "clip": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "conditioning": [
+        "13",
+        0
+      ]
+    },
+    "class_type": "ConditioningZeroOut",
+    "_meta": {
+      "title": "ConditioningZeroOut"
+    }
+  },
+  "8": {
+    "inputs": {
+      "image": "623961410_1942727123298042_2519426187561782127_n.jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "9": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "megapixels": 1,
+      "resolution_steps": 1,
+      "image": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "ImageScaleToTotalPixels"
+    }
+  },
+  "10": {
+    "inputs": {
+      "pixels": [
+        "9",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "11": {
+    "inputs": {
+      "conditioning": [
+        "6",
+        0
+      ],
+      "latent": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "ReferenceLatent"
+    }
+  },
+  "12": {
+    "inputs": {
+      "cfg": 1,
+      "model": [
+        "3",
+        0
+      ],
+      "positive": [
+        "25",
+        0
+      ],
+      "negative": [
+        "13",
+        0
+      ]
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "CFGGuider"
+    }
+  },
+  "13": {
+    "inputs": {
+      "text": "",
+      "clip": [
+        "4",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "14": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "15": {
+    "inputs": {
+      "noise_seed": 961601213835809
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "RandomNoise"
+    }
+  },
+  "16": {
+    "inputs": {
+      "steps": 8,
+      "width": 1344,
+      "height": 768
+    },
+    "class_type": "Flux2Scheduler",
+    "_meta": {
+      "title": "Flux2Scheduler"
+    }
+  },
+  "17": {
+    "inputs": {
+      "width": 1344,
+      "height": 768,
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "Empty Flux 2 Latent"
+    }
+  },
+  "18": {
+    "inputs": {
+      "noise": [
+        "15",
+        0
+      ],
+      "guider": [
+        "12",
+        0
+      ],
+      "sampler": [
+        "14",
+        0
+      ],
+      "sigmas": [
+        "16",
+        0
+      ],
+      "latent_image": [
+        "17",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "SamplerCustomAdvanced"
+    }
+  },
+  "19": {
+    "inputs": {
+      "samples": [
+        "18",
+        1
+      ],
+      "vae": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "20": {
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "21": {
+    "inputs": {
+      "filename_prefix": "VidBoard/frame",
+      "images": [
+        "19",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "22": {
+    "inputs": {
+      "image": "vidboard-start-frame-placeholder.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image - Generated Start Frame"
+    }
+  },
+  "23": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "megapixels": 0.35,
+      "resolution_steps": 1,
+      "image": [
+        "22",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "Scale Generated Start Frame"
+    }
+  },
+  "24": {
+    "inputs": {
+      "pixels": [
+        "23",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode - Generated Start Frame"
+    }
+  },
+  "25": {
+    "inputs": {
+      "conditioning": [
+        "11",
+        0
+      ],
+      "latent": [
+        "24",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "ReferenceLatent - Generated Start Frame"
+    }
+  }
+}

@@ -58,31 +58,6 @@ const ASPECT_SIZES: Record<AspectRatio, { width: number; height: number }> = {
   "1:1": { width: 1024, height: 1024 },
 };
 
-const NEGATIVE_PROMPT = [
-  "text",
-  "subtitles",
-  "captions",
-  "lyrics",
-  "lettering",
-  "logo",
-  "watermark",
-  "cartoon",
-  "illustration",
-  "anime",
-  "CGI",
-  "fantasy concept art",
-  "duplicated faces",
-  "deformed face",
-  "asymmetrical face",
-  "bad eyes",
-  "crossed eyes",
-  "distorted mouth",
-  "mutated hands",
-  "changed costume",
-  "changed instrument",
-  "inconsistent character identity",
-].join(", ");
-
 const isGenerateImageRequest = (value: unknown): value is GenerateImageRequestPayload => {
   if (!value || typeof value !== "object") return false;
   const data = value as Record<string, unknown>;
@@ -192,6 +167,7 @@ const setInputIfPresent = (
 };
 
 const injectWorkflowInputs = (
+  workflowName: string,
   workflow: Record<string, { inputs?: Record<string, unknown> }>,
   nodes: WorkflowNodeMap,
   prompt: string,
@@ -212,7 +188,13 @@ const injectWorkflowInputs = (
   setInputIfPresent(workflow, nodes.latent, "height", size.height);
   setInputIfPresent(workflow, nodes.latent, "batch_size", 1);
   setInputIfPresent(workflow, nodes.saveImage, "filename_prefix", "VidBoard/frame");
-  setInputIfPresent(workflow, nodes.negativePrompt, "text", NEGATIVE_PROMPT);
+  if (nodes.negativePrompt && workflow[nodes.negativePrompt]) {
+    const isFlux = /flux/i.test(workflowName);
+    if (!isFlux) {
+      requireWorkflowNode(workflow, nodes.negativePrompt, "negative prompt").inputs!.text =
+        process.env.COMFYUI_NEGATIVE_PROMPT ?? "";
+    }
+  }
 
   if (referenceFilename && nodes.referenceImage) {
     requireWorkflowNode(workflow, nodes.referenceImage, "reference image").inputs!.image =
@@ -408,6 +390,7 @@ export async function POST(req: NextRequest) {
     const referenceFilename = await uploadReferenceImage(body.referenceImageBase64);
     const initFilename = await uploadReferenceImage(body.initImageBase64);
     injectWorkflowInputs(
+      workflowName,
       workflow,
       definition.nodes,
       body.prompt,
@@ -425,6 +408,40 @@ export async function POST(req: NextRequest) {
     console.error("ComfyUI generation failed", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to generate image." },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/generate-image
+ *
+ * Instructs ComfyUI to unload all models from VRAM and free GPU memory.
+ * Call this after a storyboard generation run is fully complete.
+ * Non-fatal — a failure here does not affect already-generated images.
+ */
+export async function DELETE() {
+  try {
+    await ensureComfyReachable();
+    const response = await fetchWithTimeout(
+      `${COMFYUI_BASE_URL}/free`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unload_models: true, free_memory: true }),
+      },
+      CONNECTION_TIMEOUT_MS
+    );
+
+    if (!response.ok) {
+      throw new Error(`ComfyUI /free responded with HTTP ${response.status}`);
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.warn("ComfyUI VRAM free failed (non-fatal)", error);
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }

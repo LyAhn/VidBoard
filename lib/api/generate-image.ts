@@ -41,3 +41,11 @@ export const getWorkflowInfo = async (): Promise<WorkflowInfoResponsePayload> =>
   }
   return data as WorkflowInfoResponsePayload;
 };
+
+export const freeComfyMemory = async (): Promise<void> => {
+  try {
+    await fetch("/api/generate-image", { method: "DELETE" });
+  } catch {
+    // Non-fatal — VRAM will be reclaimed when ComfyUI next loads a model.
+  }
+};
