@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { AlertTriangle, ChevronDown, ChevronRight, Copy, ImageIcon, Loader2 } from "lucide-react";
+import { AlertTriangle, Camera, ChevronDown, ChevronRight, Copy, ImageIcon, Loader2, Palette, Sun, User } from "lucide-react";
 import type { AspectRatio, FrameData } from "@/lib/vidboard-types";
 
 interface StoryboardGridProps {
@@ -92,7 +92,7 @@ export function StoryboardGrid({
     >
       {frames.map((frame, idx) => (
         <div key={idx} className="glass rounded-xl overflow-hidden flex flex-col group relative">
-          <div className="flex w-full overflow-hidden border-b border-[#222] relative">
+          <div className="flex w-full overflow-hidden border-b border-[#2a2a2a] relative">
             <FrameImageState
               imageBase64={frame.startImageBase64}
               error={frame.error}
@@ -103,7 +103,7 @@ export function StoryboardGrid({
               aspectRatio={aspectRatio}
             />
 
-            <div className="w-6 flex items-center justify-center bg-[#0a0a0a] z-10 border-l border-r border-[#222]">
+            <div className="w-6 flex items-center justify-center bg-[#171717] z-10 border-l border-r border-[#2a2a2a]">
               <span className="text-amber-500 font-bold text-sm">→</span>
             </div>
 
@@ -123,26 +123,34 @@ export function StoryboardGrid({
 
           <div className="p-4 flex-1 flex flex-col justify-between">
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex flex-wrap gap-1 items-center">
-                  {frame.character_present && (
-                    <span className="text-[9px] bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded border border-purple-500/30 font-semibold uppercase">
-                      Character Present
-                    </span>
-                  )}
-                  <span className="text-[9px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30 font-semibold uppercase">
-                    {frame.camera_angle}
+              <div className="flex flex-wrap gap-1 items-center mb-2">
+                {frame.character_present && (
+                  <span className="flex items-center gap-1 text-[9px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/30 font-semibold uppercase">
+                    <User className="w-2.5 h-2.5 shrink-0" />
+                    Character
                   </span>
-                  <span className="text-[9px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded border border-amber-500/30 font-semibold uppercase">
-                    {frame.lighting}
-                  </span>
-                </div>
-
-                <div className="flex gap-1 h-2 opacity-60 ml-2 shrink-0">
-                  <div className="w-2 h-full bg-blue-600 rounded-full" title={frame.colour_palette}></div>
-                  <div className="w-2 h-full bg-purple-700 rounded-full" title={frame.colour_palette}></div>
-                  <div className="w-2 h-full bg-amber-500 rounded-full" title={frame.colour_palette}></div>
-                </div>
+                )}
+                <span
+                  className="flex items-center gap-1 text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/30 font-semibold uppercase max-w-[130px]"
+                  title={frame.camera_angle}
+                >
+                  <Camera className="w-2.5 h-2.5 shrink-0" />
+                  <span className="truncate">{frame.camera_angle}</span>
+                </span>
+                <span
+                  className="flex items-center gap-1 text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/30 font-semibold uppercase max-w-[130px]"
+                  title={frame.lighting}
+                >
+                  <Sun className="w-2.5 h-2.5 shrink-0" />
+                  <span className="truncate">{frame.lighting}</span>
+                </span>
+                <span
+                  className="flex items-center gap-1 text-[9px] text-neutral-500 px-1.5 py-0.5 rounded border border-neutral-700/40 font-medium max-w-[140px]"
+                  title={frame.colour_palette}
+                >
+                  <Palette className="w-2.5 h-2.5 shrink-0" />
+                  <span className="truncate">{frame.colour_palette}</span>
+                </span>
               </div>
 
               <p className="text-[11px] text-gray-400 line-clamp-3 leading-relaxed mb-2">
@@ -169,12 +177,12 @@ export function StoryboardGrid({
                   navigator.clipboard.writeText(frame.image_prompt);
                   alert("Image prompt copied!");
                 }}
-                className="flex-1 py-1.5 border border-[#333] hover:border-amber-500 text-[9px] font-bold uppercase rounded transition-colors"
+                className="flex-1 py-1.5 border border-[#2a2a2a] hover:border-amber-500 text-[9px] font-bold uppercase rounded transition-colors"
               >
                 Copy Prompt
               </button>
               <button
-                className="p-1.5 border border-[#333] hover:border-amber-500 rounded transition-colors"
+                className="p-1.5 border border-[#2a2a2a] hover:border-amber-500 rounded transition-colors"
                 onClick={() => onToggleDescription(idx)}
                 title="Toggle full details"
               >
@@ -187,7 +195,7 @@ export function StoryboardGrid({
             </div>
 
             {expandedDescriptions[idx] && (
-              <div className="mt-3 text-[10px] text-gray-400 bg-black/50 p-2 rounded border border-white/10 break-all font-mono">
+              <div className="mt-3 text-[10px] text-gray-400 bg-neutral-900/60 p-2 rounded border border-white/10 break-all font-mono">
                 {frame.image_prompt}
               </div>
             )}

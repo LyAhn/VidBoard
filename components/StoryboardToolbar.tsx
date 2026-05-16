@@ -20,7 +20,7 @@ export function StoryboardToolbar({
   if (!frames.length) return null;
 
   return (
-    <header className="sticky top-0 z-20 h-16 border-b border-[#1a1a1a] flex items-center justify-between px-8 bg-[#0a0a0a]/50 backdrop-blur-md">
+    <header className="sticky top-0 z-20 h-16 border-b border-[#252525] flex items-center justify-between px-8 bg-[#171717]/70 backdrop-blur-md">
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2 text-xs font-medium text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
           <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>

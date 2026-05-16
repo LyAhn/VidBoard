@@ -45,7 +45,7 @@ export function VidBoardSidebar({
   const isDisabled = state.isPlanning || state.isGeneratingImages || !servicesReady;
 
   return (
-    <div className="w-full md:w-[300px] flex-shrink-0 bg-[#0a0a0a] border-b md:border-b-0 md:border-r border-[#1a1a1a] flex flex-col z-10 transition-all md:h-full max-h-[50vh] md:max-h-full p-5 gap-5">
+    <div className="w-full md:w-[300px] flex-shrink-0 bg-[#171717] border-b md:border-b-0 md:border-r border-[#252525] flex flex-col z-10 transition-all md:h-full max-h-[50vh] md:max-h-full p-5 gap-5">
       <div className="flex items-center gap-3 mb-2">
         <div className="w-8 h-8 rounded bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center font-bold text-black text-xs italic">
           VB
@@ -53,7 +53,7 @@ export function VidBoardSidebar({
         <h1 className="text-xl font-black tracking-tighter text-white uppercase">VidBoard</h1>
       </div>
 
-      <div className="flex items-center gap-4 px-2 py-1.5 rounded bg-[#111] border border-[#1e1e1e]">
+      <div className="flex items-center gap-4 px-2 py-1.5 rounded bg-[#1c1c1c] border border-[#2a2a2a]">
         <StatusDot color={ollamaColor} label="Ollama" />
         <StatusDot color={comfyColor} label="ComfyUI" />
       </div>
@@ -65,7 +65,7 @@ export function VidBoardSidebar({
             <input
               value={state.artistName}
               onChange={(e) => updateState({ artistName: e.target.value })}
-              className="w-full bg-[#151515] border border-[#222] rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition-colors"
+              className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition-colors"
               placeholder="e.g. The Weeknd"
             />
           </div>
@@ -74,7 +74,7 @@ export function VidBoardSidebar({
             <input
               value={state.trackTitle}
               onChange={(e) => updateState({ trackTitle: e.target.value })}
-              className="w-full bg-[#151515] border border-[#222] rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition-colors"
+              className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition-colors"
               placeholder="e.g. Blinding Lights"
             />
           </div>
@@ -84,7 +84,7 @@ export function VidBoardSidebar({
               value={state.lyrics}
               onChange={(e) => updateState({ lyrics: e.target.value })}
               rows={8}
-              className="w-full bg-[#151515] border border-[#222] rounded px-3 py-2 text-xs focus:outline-none focus:border-amber-500 transition-colors resize-none font-mono"
+              className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded px-3 py-2 text-xs focus:outline-none focus:border-amber-500 transition-colors resize-none font-mono"
               placeholder="Paste song lyrics here..."
             />
           </div>
@@ -93,7 +93,7 @@ export function VidBoardSidebar({
             <input
               value={state.theme}
               onChange={(e) => updateState({ theme: e.target.value })}
-              className="w-full bg-[#151515] border border-[#222] rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition-colors"
+              className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500 transition-colors"
               placeholder="e.g. dark and ethereal, euphoric"
             />
           </div>
@@ -116,7 +116,7 @@ export function VidBoardSidebar({
                   className={`py-1.5 rounded text-[10px] font-semibold uppercase tracking-wide border transition-colors ${
                     state.visualDirection === value
                       ? "bg-amber-500 border-amber-500 text-black"
-                      : "bg-[#151515] border-[#222] text-gray-400 hover:border-amber-500/50"
+                      : "bg-[#1e1e1e] border-[#2a2a2a] text-gray-400 hover:border-amber-500/50"
                   }`}
                 >
                   {label}
@@ -154,7 +154,7 @@ export function VidBoardSidebar({
               step="1"
               value={state.numberOfFrames}
               onChange={(e) => updateState({ numberOfFrames: parseInt(e.target.value) })}
-              className="w-full bg-[#151515] border border-[#222] rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+              className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
             />
           </div>
           <div className="flex-1 space-y-1">
@@ -162,7 +162,7 @@ export function VidBoardSidebar({
             <select
               value={state.aspectRatio}
               onChange={(e) => updateState({ aspectRatio: e.target.value as AspectRatio })}
-              className="w-full bg-[#151515] border border-[#222] rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+              className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
             >
               <option value="16:9">16:9</option>
               <option value="9:16">9:16</option>

@@ -376,7 +376,7 @@ export default function VidBoardApp() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-[#050505] font-sans text-[#e5e5e5]">
+    <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-[#111111] font-sans text-[#e5e5e5]">
       <VidBoardSidebar
         state={state}
         planningElapsed={planningElapsed}
@@ -385,7 +385,7 @@ export default function VidBoardApp() {
         updateState={updateState}
       />
 
-      <div className="flex-1 overflow-y-auto flex flex-col relative bg-[#050505]" ref={mainAreaRef}>
+      <div className="flex-1 overflow-y-auto flex flex-col relative bg-[#111111]" ref={mainAreaRef}>
         <StoryboardToolbar
           frames={state.frames}
           isGeneratingImages={state.isGeneratingImages}

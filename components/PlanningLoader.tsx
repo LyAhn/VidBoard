@@ -57,14 +57,14 @@ function StageList({ stepIndex }: { stepIndex: number }) {
             style={{
               width: 6,
               height: 6,
-              background: idx < stepIndex ? "#78350f" : idx === stepIndex ? "#fbbf24" : "#1c1c1c",
+              background: idx < stepIndex ? "#78350f" : idx === stepIndex ? "#fbbf24" : "#303030",
               animation: idx === stepIndex ? "amber-glow 1.8s ease-in-out infinite" : undefined,
             }}
           />
           <span
             className="text-sm transition-colors duration-500"
             style={{
-              color: idx < stepIndex ? "#404040" : idx === stepIndex ? "#fef3c7" : "#2a2a2a",
+              color: idx < stepIndex ? "#525252" : idx === stepIndex ? "#fef3c7" : "#444444",
               fontWeight: idx === stepIndex ? 500 : 400,
             }}
           >
@@ -122,7 +122,7 @@ export function CinematicLoader({ elapsed, stepIndex }: PlanningLoaderProps) {
                 className="border border-neutral-800 rounded-sm"
                 style={{
                   height: 44,
-                  background: `linear-gradient(${(frameIdx * 67 + 13) % 360}deg, #0a0a0a 0%, #171717 100%)`,
+                  background: `linear-gradient(${(frameIdx * 67 + 13) % 360}deg, #171717 0%, #1e1e1e 100%)`,
                 }}
               />
               <div className="flex justify-around mt-1">
@@ -136,11 +136,11 @@ export function CinematicLoader({ elapsed, stepIndex }: PlanningLoaderProps) {
         {/* Fade edges */}
         <div
           className="absolute inset-y-0 left-0 w-24 pointer-events-none"
-          style={{ background: "linear-gradient(to right, #050505, transparent)" }}
+          style={{ background: "linear-gradient(to right, #111111, transparent)" }}
         />
         <div
           className="absolute inset-y-0 right-0 w-24 pointer-events-none"
-          style={{ background: "linear-gradient(to left, #050505, transparent)" }}
+          style={{ background: "linear-gradient(to left, #111111, transparent)" }}
         />
       </div>
 
