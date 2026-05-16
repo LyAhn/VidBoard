@@ -23,6 +23,8 @@ export function VisualBibleCard({
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
+        aria-expanded={!collapsed}
+        aria-controls="visual-bible-content"
         className="flex items-center justify-between w-full text-left group"
       >
         <h2 className="text-[10px] text-amber-500 uppercase font-black tracking-[0.2em] flex items-center gap-2">
@@ -36,7 +38,7 @@ export function VisualBibleCard({
       </button>
 
       {!collapsed && (
-        <>
+        <div id="visual-bible-content" className="flex flex-col gap-4">
           <div className="text-sm text-gray-300 leading-relaxed bg-black/50 p-4 rounded border border-amber-500/10 prose prose-sm prose-invert prose-headings:text-amber-400 prose-headings:font-bold prose-headings:uppercase prose-headings:tracking-wide prose-headings:text-xs prose-strong:text-gray-200 prose-ul:my-1 prose-li:my-0 max-w-none">
             <ReactMarkdown>{visualBible}</ReactMarkdown>
           </div>
@@ -63,7 +65,7 @@ export function VisualBibleCard({
               <span className="text-xs text-green-400 font-medium">Uploaded ✓</span>
             )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );

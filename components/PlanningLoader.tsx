@@ -12,7 +12,7 @@ function StatusHeader({ elapsed }: { elapsed: number }) {
     <div className="flex items-center gap-2.5 mb-6">
       <div
         className="w-1.5 h-1.5 rounded-full bg-amber-400"
-        style={{ animation: "dotPulse 1.5s ease-in-out infinite" }}
+        style={{ animation: "dot-pulse 1.5s ease-in-out infinite" }}
       />
       <span className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-400">
         Planning Blueprint
@@ -23,7 +23,9 @@ function StatusHeader({ elapsed }: { elapsed: number }) {
 }
 
 function ProgressRail({ stepIndex }: { stepIndex: number }) {
-  const progress = Math.round(((stepIndex + 1) / planningSteps.length) * 100);
+  const safeIndex = Math.min(Math.max(stepIndex, 0), Math.max(planningSteps.length - 1, 0));
+  const progress =
+    planningSteps.length === 0 ? 0 : Math.round(((safeIndex + 1) / planningSteps.length) * 100);
   return (
     <div className="w-full max-w-sm mb-8">
       <div className="h-px bg-neutral-800 relative overflow-hidden rounded-full">
@@ -48,7 +50,7 @@ function StageList({ stepIndex }: { stepIndex: number }) {
         <div
           key={step}
           className="flex items-center gap-3"
-          style={idx === stepIndex ? { animation: "stageSlideIn 0.4s ease-out" } : {}}
+          style={idx === stepIndex ? { animation: "stage-slide-in 0.4s ease-out" } : {}}
         >
           <div
             className="shrink-0 rounded-full transition-all duration-500"
@@ -56,7 +58,7 @@ function StageList({ stepIndex }: { stepIndex: number }) {
               width: 6,
               height: 6,
               background: idx < stepIndex ? "#78350f" : idx === stepIndex ? "#fbbf24" : "#1c1c1c",
-              animation: idx === stepIndex ? "amberGlow 1.8s ease-in-out infinite" : undefined,
+              animation: idx === stepIndex ? "amber-glow 1.8s ease-in-out infinite" : undefined,
             }}
           />
           <span
@@ -102,7 +104,7 @@ export function CinematicLoader({ elapsed, stepIndex }: PlanningLoaderProps) {
           className="flex items-center"
           style={{
             width: stripItems.length * (FRAME_W + FRAME_GAP),
-            animation: "filmScroll 22s linear infinite",
+            animation: "film-scroll 22s linear infinite",
           }}
         >
           {stripItems.map((frameIdx, i) => (

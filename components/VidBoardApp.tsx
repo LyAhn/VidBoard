@@ -200,12 +200,10 @@ export default function VidBoardApp() {
           return secs > 0 ? ` (${secs}s)` : "";
         };
 
-        // Only pass the reference image for frames that actually feature the character.
-        const frameRef = frame.character_present ? referenceImageBase64 : undefined;
-        const startWorkflow = frame.character_present ? undefined : "flux2-klein-txt2img";
-        // End frames always use the reference workflow (never the img2img one — we no longer use
-        // the start frame as init conditioning; end frames are independent generations).
-        const endWorkflow = frame.character_present ? "flux2-klein-reference" : "flux2-klein-txt2img";
+        const useReferenceWorkflow = frame.character_present && Boolean(referenceImageBase64);
+        const frameRef = useReferenceWorkflow ? referenceImageBase64 : undefined;
+        const startWorkflow = useReferenceWorkflow ? undefined : "flux2-klein-txt2img";
+        const endWorkflow = useReferenceWorkflow ? "flux2-klein-reference" : "flux2-klein-txt2img";
 
         updateState({ statusMessage: `${frameLabel}: queuing start image...` });
         const startData = await requestGeneratedImage({
@@ -251,8 +249,13 @@ export default function VidBoardApp() {
   };
 
   const handleGenerate = async () => {
-    if (!state.artistName || !state.trackTitle || !state.lyrics) {
-      updateState({ error: "Please fill in artist name, track title, and lyrics." });
+    const hasLyrics = state.lyrics.trim().length > 0;
+    const hasVisualConcept = state.visualConcept.trim().length > 0;
+    if (!state.artistName || !state.trackTitle || (!hasLyrics && !hasVisualConcept)) {
+      updateState({
+        error:
+          "Please fill in artist name, track title, and either lyrics or a visual concept for instrumental tracks.",
+      });
       return;
     }
 

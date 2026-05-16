@@ -50,7 +50,9 @@ const cameraPackage = (cameraAngle: string) => {
 };
 
 const buildSharedPrompt = (frame: FrameData, visualBible: string) => {
-  const scenePrompt = cleanPrompt(stripVisualBible(frame.image_prompt, visualBible));
+  const scenePrompt =
+    cleanPrompt(stripVisualBible(frame.image_prompt, visualBible)) ||
+    cleanPrompt(frame.image_prompt);
   const vbSummary = truncateVisualBible(visualBible);
   const camera = cameraPackage(frame.camera_angle);
   const lighting = cleanPrompt(frame.lighting).toLowerCase();

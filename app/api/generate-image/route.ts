@@ -167,6 +167,7 @@ const setInputIfPresent = (
 };
 
 const injectWorkflowInputs = (
+  workflowName: string,
   workflow: Record<string, { inputs?: Record<string, unknown> }>,
   nodes: WorkflowNodeMap,
   prompt: string,
@@ -188,9 +189,11 @@ const injectWorkflowInputs = (
   setInputIfPresent(workflow, nodes.latent, "batch_size", 1);
   setInputIfPresent(workflow, nodes.saveImage, "filename_prefix", "VidBoard/frame");
   if (nodes.negativePrompt && workflow[nodes.negativePrompt]) {
-    // Only inject negative prompt for non-FLUX workflows that support CFG-based negative guidance.
-    // FLUX.1/2 family models use flow matching and ignore negative prompts — leave node unset.
-    console.log("Negative prompt node present in workflow but skipped — FLUX models do not support CFG negative guidance.");
+    const isFlux = /flux/i.test(workflowName);
+    if (!isFlux) {
+      requireWorkflowNode(workflow, nodes.negativePrompt, "negative prompt").inputs!.text =
+        process.env.COMFYUI_NEGATIVE_PROMPT ?? "";
+    }
   }
 
   if (referenceFilename && nodes.referenceImage) {
@@ -387,6 +390,7 @@ export async function POST(req: NextRequest) {
     const referenceFilename = await uploadReferenceImage(body.referenceImageBase64);
     const initFilename = await uploadReferenceImage(body.initImageBase64);
     injectWorkflowInputs(
+      workflowName,
       workflow,
       definition.nodes,
       body.prompt,

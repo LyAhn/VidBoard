@@ -67,7 +67,7 @@ export function VidBoardSidebar({
           </div>
           <div className="space-y-1">
             <label className="input-label">Visual Direction</label>
-            <div className="grid grid-cols-3 gap-1">
+            <div className="grid grid-cols-3 gap-1" role="radiogroup" aria-label="Visual Direction">
               {(
                 [
                   { value: "artist", label: "Artist Look" },
@@ -78,6 +78,8 @@ export function VidBoardSidebar({
                 <button
                   key={value}
                   type="button"
+                  role="radio"
+                  aria-checked={state.visualDirection === value}
                   onClick={() => updateState({ visualDirection: value })}
                   className={`py-1.5 rounded text-[10px] font-semibold uppercase tracking-wide border transition-colors ${
                     state.visualDirection === value

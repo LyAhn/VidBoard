@@ -16,6 +16,8 @@ export function ArtistContextCard({ artistContext }: ArtistContextCardProps) {
       <button
         type="button"
         onClick={() => setCollapsed((c) => !c)}
+        aria-expanded={!collapsed}
+        aria-controls="artist-context-content"
         className="flex items-center justify-between w-full text-left group"
       >
         <h2 className="text-[10px] text-amber-500 uppercase font-black tracking-[0.2em] flex items-center gap-2">
@@ -29,7 +31,10 @@ export function ArtistContextCard({ artistContext }: ArtistContextCardProps) {
       </button>
 
       {!collapsed && (
-        <div className="text-sm text-gray-400 leading-relaxed border-l-2 border-amber-500/30 pl-4 prose prose-sm prose-invert prose-headings:text-amber-400 prose-headings:font-bold prose-headings:uppercase prose-headings:tracking-wide prose-headings:text-xs prose-strong:text-gray-200 prose-ul:my-1 prose-li:my-0 max-w-none">
+        <div
+          id="artist-context-content"
+          className="text-sm text-gray-400 leading-relaxed border-l-2 border-amber-500/30 pl-4 prose prose-sm prose-invert prose-headings:text-amber-400 prose-headings:font-bold prose-headings:uppercase prose-headings:tracking-wide prose-headings:text-xs prose-strong:text-gray-200 prose-ul:my-1 prose-li:my-0 max-w-none"
+        >
           <ReactMarkdown>{artistContext}</ReactMarkdown>
         </div>
       )}

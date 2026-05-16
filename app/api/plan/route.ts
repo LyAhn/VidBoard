@@ -105,7 +105,10 @@ const normalisePlanRequest = (body: Record<string, unknown>): PlanRequest => ({
     ? (body.visualDirection as VisualDirection)
     : "lyrics",
   visualConcept: typeof body.visualConcept === "string" ? body.visualConcept : "",
-  numberOfFrames: Number(body.numberOfFrames),
+  numberOfFrames: (() => {
+    const raw = Number(body.numberOfFrames);
+    return Number.isFinite(raw) ? Math.min(16, Math.max(4, Math.round(raw))) : 8;
+  })(),
   aspectRatio: body.aspectRatio as AspectRatio,
 });
 
@@ -322,6 +325,9 @@ Rules:
     }
 
     const frames = (plan.frames as StoryboardFrame[]).map(normalizeFramePrompt);
+    if (frames.length !== numberOfFrames) {
+      throw new Error(`Storyboard returned ${frames.length} frames; expected ${numberOfFrames}.`);
+    }
     logStep("storyboard JSON complete", startedAt);
 
     // Free VRAM before ComfyUI takes over — fire-and-forget, don't block the response.
