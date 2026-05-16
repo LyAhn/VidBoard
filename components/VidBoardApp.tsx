@@ -14,11 +14,7 @@ import { exportStoryboardZip } from "@/lib/export-zip";
 import { buildEndFramePrompt, buildStartFramePrompt } from "@/lib/storyboard-prompts";
 import type { AppState, FrameData } from "@/lib/vidboard-types";
 import { ArtistContextCard } from "@/components/ArtistContextCard";
-import {
-  CinematicLoader,
-  WaveformLoader,
-  DirectorLoader,
-} from "@/components/PlanningLoader";
+import { CinematicLoader } from "@/components/PlanningLoader";
 import { planningSteps } from "@/components/PlanningProgress";
 import { StoryboardGrid } from "@/components/StoryboardGrid";
 import { StoryboardToolbar } from "@/components/StoryboardToolbar";
@@ -30,6 +26,8 @@ const initialState: AppState = {
   trackTitle: "",
   lyrics: "",
   theme: "",
+  visualDirection: "lyrics",
+  visualConcept: "",
   numberOfFrames: 8,
   aspectRatio: "16:9",
   artistContext: null,
@@ -70,6 +68,10 @@ export default function VidBoardApp() {
             trackTitle: parsed.trackTitle || "",
             lyrics: parsed.lyrics || "",
             theme: parsed.theme || "",
+            visualDirection: ["artist", "lyrics", "theme"].includes(parsed.visualDirection)
+              ? parsed.visualDirection
+              : "lyrics",
+            visualConcept: parsed.visualConcept || "",
             numberOfFrames: parsed.numberOfFrames || 8,
             aspectRatio: parsed.aspectRatio || "16:9",
           }));
@@ -96,6 +98,8 @@ export default function VidBoardApp() {
       trackTitle: state.trackTitle,
       lyrics: state.lyrics,
       theme: state.theme,
+      visualDirection: state.visualDirection,
+      visualConcept: state.visualConcept,
       numberOfFrames: state.numberOfFrames,
       aspectRatio: state.aspectRatio,
       artistContext: state.artistContext,
@@ -117,6 +121,8 @@ export default function VidBoardApp() {
     state.trackTitle,
     state.lyrics,
     state.theme,
+    state.visualDirection,
+    state.visualConcept,
     state.numberOfFrames,
     state.aspectRatio,
     state.artistContext,
@@ -268,6 +274,8 @@ export default function VidBoardApp() {
         trackTitle: state.trackTitle,
         lyrics: state.lyrics,
         theme: state.theme,
+        visualDirection: state.visualDirection,
+        visualConcept: state.visualConcept,
         numberOfFrames: state.numberOfFrames,
         aspectRatio: state.aspectRatio,
       });
@@ -399,17 +407,9 @@ export default function VidBoardApp() {
           onCopyFlowPrompts={copyFlowPrompts}
         />
 
-        {/* ── Planning loaders (shown in main area while AI works) ──────────────
-            Switch the active variant by swapping which line is uncommented:
-              <CinematicLoader …/>  — Variant A: scrolling film strip + progress rail
-              <WaveformLoader …/>   — Variant B: audio-visualiser bars + stage dots
-              <DirectorLoader …/>   — Variant C: CRT terminal monitor log
-        ──────────────────────────────────────────────────────────────────── */}
         {state.isPlanning && (
           <div className="flex-1 flex items-center justify-center">
             <CinematicLoader elapsed={planningElapsed} stepIndex={planningStepIndex} />
-            {/* <WaveformLoader elapsed={planningElapsed} stepIndex={planningStepIndex} /> */}
-            {/* <DirectorLoader elapsed={planningElapsed} stepIndex={planningStepIndex} /> */}
           </div>
         )}
 
