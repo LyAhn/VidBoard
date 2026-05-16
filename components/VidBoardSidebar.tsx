@@ -1,5 +1,6 @@
 import { Activity, Loader2 } from "lucide-react";
 import type { AppState, AspectRatio, VisualDirection } from "@/lib/vidboard-types";
+import { useServiceHealth } from "@/hooks/use-service-health";
 import { PlanningProgress } from "@/components/PlanningProgress";
 
 interface VidBoardSidebarProps {
@@ -10,6 +11,22 @@ interface VidBoardSidebarProps {
   updateState: (updates: Partial<AppState>) => void;
 }
 
+type DotColor = "green" | "red" | "yellow";
+
+function StatusDot({ color, label }: { color: DotColor; label: string }) {
+  const bg: Record<DotColor, string> = {
+    green: "bg-green-500",
+    red: "bg-red-500",
+    yellow: "bg-yellow-500",
+  };
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className={`w-1.5 h-1.5 rounded-full ${bg[color]} ${color === "green" ? "animate-pulse" : ""}`} />
+      <span className="text-[9px] uppercase tracking-wide text-neutral-400">{label}</span>
+    </span>
+  );
+}
+
 export function VidBoardSidebar({
   state,
   planningElapsed,
@@ -17,6 +34,16 @@ export function VidBoardSidebar({
   onGenerate,
   updateState,
 }: VidBoardSidebarProps) {
+  const health = useServiceHealth();
+
+  const ollamaColor: DotColor =
+    health.ollama === "online" ? "green" : health.ollama === "loading" ? "yellow" : "red";
+  const comfyColor: DotColor =
+    health.comfyui === "online" ? "green" : health.comfyui === "loading" ? "yellow" : "red";
+
+  const servicesReady = health.ollama === "online" && health.comfyui === "online";
+  const isDisabled = state.isPlanning || state.isGeneratingImages || !servicesReady;
+
   return (
     <div className="w-full md:w-[300px] flex-shrink-0 bg-[#0a0a0a] border-b md:border-b-0 md:border-r border-[#1a1a1a] flex flex-col z-10 transition-all md:h-full max-h-[50vh] md:max-h-full p-5 gap-5">
       <div className="flex items-center gap-3 mb-2">
@@ -24,6 +51,11 @@ export function VidBoardSidebar({
           VB
         </div>
         <h1 className="text-xl font-black tracking-tighter text-white uppercase">VidBoard</h1>
+      </div>
+
+      <div className="flex items-center gap-4 px-2 py-1.5 rounded bg-[#111] border border-[#1e1e1e]">
+        <StatusDot color={ollamaColor} label="Ollama" />
+        <StatusDot color={comfyColor} label="ComfyUI" />
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-4">
@@ -144,8 +176,18 @@ export function VidBoardSidebar({
         <PlanningProgress elapsed={planningElapsed} stepIndex={planningStepIndex} />
       )}
 
+      {!servicesReady && health.ollama !== "loading" && health.comfyui !== "loading" && (
+        <p className="text-[9px] text-red-400/80 text-center">
+          {health.ollama === "offline" && health.comfyui === "offline"
+            ? "Ollama and ComfyUI are offline"
+            : health.ollama === "offline"
+              ? "Ollama is offline — run: ollama serve"
+              : "ComfyUI is offline — run: python main.py --listen"}
+        </p>
+      )}
+
       <button
-        disabled={state.isPlanning || state.isGeneratingImages}
+        disabled={isDisabled}
         onClick={onGenerate}
         className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 rounded-md amber-glow uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
       >

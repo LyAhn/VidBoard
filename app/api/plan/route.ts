@@ -141,6 +141,26 @@ const logStep = (label: string, startedAt: number) => {
   });
 };
 
+const isConnectionError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === "ECONNREFUSED") return true;
+  const cause = (error as { cause?: unknown }).cause;
+  if (cause instanceof Error && (cause as NodeJS.ErrnoException).code === "ECONNREFUSED") return true;
+  // Ollama SDK surfaces "fetch failed" when the socket is refused.
+  if (error.message === "fetch failed") return true;
+  return false;
+};
+
+const classifyOllamaError = (error: unknown): string => {
+  if (!(error instanceof Error)) return "Failed to plan storyboard.";
+  if (isConnectionError(error)) return "Ollama is not running. Start it with: ollama serve";
+  if (error instanceof SyntaxError || error.message.toLowerCase().includes("json")) {
+    return "Planning failed — the model returned invalid output. Try again or switch to a larger model in .env.";
+  }
+  return error.message;
+};
+
 export async function POST(req: NextRequest) {
   try {
     if (!process.env.OLLAMA_API_KEY) {
@@ -338,9 +358,6 @@ Rules:
     return NextResponse.json({ artistContext, visualBible, frames });
   } catch (error) {
     console.error("Ollama planning failed", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to plan storyboard." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: classifyOllamaError(error) }, { status: 500 });
   }
 }
