@@ -1,13 +1,13 @@
 ![line](https://capsule-render.vercel.app/api?type=egg&color=gradient&height=2)
 
-# ➤ VidBoard
+# VidBoard
 
 A local-first music video storyboard tool. Uses Ollama (Qwen3) for AI planning and ComfyUI + FLUX.2 Klein for cinematic frame generation — no cloud dependencies, no API rate limits.
 
 
 ![line](https://capsule-render.vercel.app/api?type=egg&color=gradient&height=2)
 
-## ➤ Purpose
+## Purpose
 
 VidBoard is designed to streamline the pre-production pipeline for AI-assisted music video creation.
 
@@ -27,22 +27,24 @@ This means VidBoard handles the creative planning and visual consistency work, w
 
 ![line](https://capsule-render.vercel.app/api?type=egg&color=gradient&height=2)
 
-## ➤ Prerequisites
+## Prerequisites
 
 ### 1. Node.js 20+ and pnpm
 
 ### 2. Ollama
 
 - Install: https://ollama.com/download
-- Pull the planning model:
+- Pull a planning model *(tested with Gemma4)*:
   ```bash
-  ollama pull qwen3:8b
+  ollama pull gemma4:e4b
   ```
 - Create a free account at https://ollama.com and generate an API key — required for Ollama's web search feature
 
-### 3. ComfyUI + FLUX.2 Klein
+### 3. ComfyUI & FLUX.2 Klein
 
 Install ComfyUI: https://github.com/comfy-org/ComfyUI
+
+> If you want to use the included workflows, you will need to download the following models.
 
 Download the following model files and place them in your ComfyUI installation:
 
@@ -60,12 +62,17 @@ Start ComfyUI so it listens on the network:
 python main.py --listen
 ```
 
-> Comfy Desktop runs on a different port — check its startup log for the actual URL and set `COMFYUI_BASE_URL` accordingly.
+If you use the Windows Portable version, edit the start up batch files to include --listen
 
+```bash
+.\python_embeded\python.exe -s ComfyUI\main.py --windows-standalone-build --listen
+```
+
+> Comfy Desktop will run on a different port and is always set to listen. Check its startup log for the actual URL and set `COMFYUI_BASE_URL` accordingly (it will usually be port 8000).
 
 ![line](https://capsule-render.vercel.app/api?type=egg&color=gradient&height=2)
 
-## ➤ Setup
+## Setup
 
 ```bash
 git clone https://github.com/LyAhn/VidBoard
@@ -81,7 +88,7 @@ Open http://localhost:3000.
 
 ![line](https://capsule-render.vercel.app/api?type=egg&color=gradient&height=2)
 
-## ➤ Workflows
+## Workflows
 
 Three ComfyUI workflow files are included in `comfyui/`, all targeting **FLUX.2 Klein 4B**:
 
@@ -111,7 +118,7 @@ See [`comfyui/README.md`](comfyui/README.md) for full workflow documentation, th
 
 ![line](https://capsule-render.vercel.app/api?type=egg&color=gradient&height=2)
 
-## ➤ Recommended Hardware
+## Recommended Hardware
 
 - **GPU:** RTX 3080 Ti / 12 GB+ VRAM (FLUX.2 Klein FP8 uses ~10–11 GB)
 - **RAM:** 16 GB+ system RAM
@@ -120,9 +127,8 @@ See [`comfyui/README.md`](comfyui/README.md) for full workflow documentation, th
 
 ![line](https://capsule-render.vercel.app/api?type=egg&color=gradient&height=2)
 
-## ➤ Architecture
+## Architecture
 
 - **Frontend:** Next.js 15 + React 19 + Tailwind CSS
 - **Planning LLM:** Ollama (qwen3:8b) with web search grounding
 - **Image generation:** ComfyUI + FLUX.2 Klein 4B FP8
-- **No cloud dependencies**
