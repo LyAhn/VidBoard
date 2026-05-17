@@ -437,6 +437,11 @@ export default function VidBoardApp() {
           isGenerating: false,
         });
       }
+      // Auto-save so the new image path is persisted immediately
+      setState((prev) => {
+        saveCurrentProject(prev, currentProjectId).catch(console.error);
+        return prev;
+      });
     } catch (error) {
       updateFrame(frameIdx, {
         isGenerating: false,
@@ -676,6 +681,7 @@ export default function VidBoardApp() {
             onToggleDescription={toggleDescription}
             cardLayout={cardLayout}
             onRegenerateFrame={regenerateSingleFrame}
+            onUpdateFrame={updateFrame}
           />
         </div>
 
