@@ -1,6 +1,6 @@
 // IMPORTANT: Never call COMFYUI_BASE_URL directly from client code.
 // All image generation must go via /api/generate-image.
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 import type { AspectRatio, GenerateImageRequestPayload } from "@/lib/vidboard-types";
@@ -74,7 +74,8 @@ const isGenerateImageRequest = (value: unknown): value is GenerateImageRequestPa
     (data.initImageBase64 === undefined ||
       data.initImageBase64 === null ||
       typeof data.initImageBase64 === "string") &&
-    (data.workflow === undefined || typeof data.workflow === "string")
+    (data.workflow === undefined || typeof data.workflow === "string") &&
+    (data.projectId === undefined || typeof data.projectId === "string")
   );
 };
 
@@ -375,20 +376,38 @@ const classifyComfyError = (error: unknown): string => {
   return msg;
 };
 
-const downloadImageAsBase64 = async (image: ComfyImageOutput) => {
+const DATA_DIR = path.join(process.cwd(), "data");
+
+const fetchImageBuffer = async (image: ComfyImageOutput): Promise<Buffer> => {
   const params = new URLSearchParams({
     filename: image.filename,
     subfolder: image.subfolder || "",
     type: image.type || "output",
   });
   const response = await fetchWithTimeout(`${COMFYUI_BASE_URL}/view?${params}`);
-
   if (!response.ok) {
     throw new Error(`ComfyUI image fetch failed: HTTP ${response.status}`);
   }
+  return Buffer.from(await response.arrayBuffer());
+};
 
-  const buffer = Buffer.from(await response.arrayBuffer());
-  return buffer.toString("base64");
+const downloadImage = async (image: ComfyImageOutput, projectId: string, kind: string) => {
+  const buffer = await fetchImageBuffer(image);
+  const imageBase64 = buffer.toString("base64");
+
+  // Persist to disk under data/projects/{projectId}/
+  if (!/^[A-Za-z0-9_-]+$/.test(projectId)) {
+    throw new Error("Invalid projectId.");
+  }
+  const projectDir = path.join(DATA_DIR, "projects", projectId);
+  await mkdir(projectDir, { recursive: true });
+  const filename = `${kind}-${Date.now()}.png`;
+  const filePath = path.join(projectDir, filename);
+  await writeFile(filePath, buffer);
+  // Return a URL-safe relative path for serving via /api/images
+  const imagePath = `projects/${projectId}/${filename}`;
+
+  return { imageBase64, imagePath };
 };
 
 export async function POST(req: NextRequest) {
@@ -423,9 +442,11 @@ export async function POST(req: NextRequest) {
 
     const promptId = await queueWorkflow(workflow);
     const outputImage = await pollForImage(promptId);
-    const imageBase64 = await downloadImageAsBase64(outputImage);
+    const projectId = body.projectId ?? "unsaved";
+    const kind = body.kind ?? "frame";
+    const { imageBase64, imagePath } = await downloadImage(outputImage, projectId, kind);
 
-    return NextResponse.json({ imageBase64, promptId, workflow: workflowName });
+    return NextResponse.json({ imageBase64, promptId, workflow: workflowName, imagePath });
   } catch (error) {
     console.error("ComfyUI generation failed", error);
     return NextResponse.json({ error: classifyComfyError(error) }, { status: 500 });
@@ -517,7 +538,7 @@ export async function GET(req: NextRequest) {
       if (entry?.outputs) {
         const image = findFirstImage(entry);
         if (image) {
-          const imageBase64 = await downloadImageAsBase64(image);
+          const imageBase64 = (await fetchImageBuffer(image)).toString("base64");
           return NextResponse.json({ status: "done", imageBase64, promptId });
         }
       }

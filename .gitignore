@@ -37,3 +37,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local data
+/*.db
+/*.db-shm
+/*.db-wal
+/data/
+/drizzle/

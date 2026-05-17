@@ -18,10 +18,15 @@ export interface FramePlan {
 export interface FrameData extends FramePlan {
   startImageBase64?: string;
   endImageBase64?: string;
+  startImagePath?: string;
+  endImagePath?: string;
+  startImageHistory?: string[];
+  endImageHistory?: string[];
   startPromptId?: string;
   endPromptId?: string;
   next_lyric_line?: string;
-  isGenerating?: boolean;
+  isGeneratingStart?: boolean;
+  isGeneratingEnd?: boolean;
   error?: string;
 }
 
@@ -65,6 +70,7 @@ export interface GenerateImageRequestPayload {
   prompt: string;
   aspectRatio: AspectRatio;
   kind?: "start" | "end";
+  projectId?: string;
   referenceImageBase64?: string | null;
   initImageBase64?: string | null;
   workflow?: string;
@@ -74,6 +80,21 @@ export interface GenerateImageResponsePayload {
   imageBase64: string;
   promptId: string;
   workflow: string;
+  imagePath?: string;
+}
+
+export interface ProjectSummaryPayload {
+  id: string;
+  name: string;
+  artistName: string;
+  trackTitle: string;
+  createdAt: string;
+  updatedAt: string;
+  thumbnailImagePath: string | null;
+}
+
+export interface ProjectDetailPayload extends ProjectSummaryPayload {
+  stateJson: string;
 }
 
 export type PromptStatusResponsePayload =

@@ -10,13 +10,16 @@
     "clean": "node -e \"require('fs').rmSync('.next', {recursive:true,force:true})\"",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "map-workflow": "node scripts/map-workflow.mjs"
+    "map-workflow": "node scripts/map-workflow.mjs",
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.1",
     "autoprefixer": "^10.4.21",
+    "better-sqlite3": "^12.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "drizzle-orm": "^0.45.2",
     "file-saver": "^2.0.5",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
@@ -35,11 +38,13 @@
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.11",
     "@tailwindcss/typography": "^0.5.19",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/file-saver": "^2.0.7",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",
+    "drizzle-kit": "^0.31.10",
     "eslint": "9.39.1",
     "eslint-config-next": "16.0.8",
     "prettier": "^3.8.3",

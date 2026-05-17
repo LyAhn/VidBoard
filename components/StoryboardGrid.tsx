@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
   AlertTriangle,
   Camera,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Copy,
   ImageIcon,
@@ -28,6 +29,7 @@ interface StoryboardGridProps {
   onToggleDescription: (idx: number) => void;
   cardLayout: CardLayout;
   onRegenerateFrame: (frameIdx: number, side: "start" | "end") => void;
+  onUpdateFrame: (frameIdx: number, updates: Partial<FrameData>) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────
@@ -38,8 +40,84 @@ const canvasClass = (aspectRatio: AspectRatio) => {
   return "aspect-square";
 };
 
-const toSrc = (b64: string) =>
-  b64.includes("data:image") ? b64 : `data:image/png;base64,${b64}`;
+const toSrc = (b64OrPath: string) => {
+  if (b64OrPath.startsWith("/api/images/") || b64OrPath.startsWith("http")) return b64OrPath;
+  if (b64OrPath.includes("data:image")) return b64OrPath;
+  return `data:image/png;base64,${b64OrPath}`;
+};
+
+const resolveImageSrc = (imageBase64?: string, imagePath?: string): string | undefined => {
+  if (imageBase64) return toSrc(imageBase64);
+  if (imagePath) return `/api/images/${imagePath}`;
+  return undefined;
+};
+
+// ── EditableText ──────────────────────────────────────────
+// Click-to-edit textarea. Commits on blur or Ctrl+Enter, cancels on Escape.
+
+function EditableText({
+  value,
+  onCommit,
+  label,
+  className,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+  label: string;
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const cancelledRef = useRef(false);
+
+  const start = () => {
+    cancelledRef.current = false;
+    setDraft(value);
+    setEditing(true);
+    setTimeout(() => {
+      ref.current?.focus();
+      ref.current?.select();
+    }, 0);
+  };
+
+  const commit = () => {
+    if (cancelledRef.current) return;
+    setEditing(false);
+    if (draft.trim() !== value.trim()) onCommit(draft.trim());
+  };
+
+  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Escape") { cancelledRef.current = true; setEditing(false); setDraft(value); }
+    if (e.key === "Enter" && e.ctrlKey) commit();
+  };
+
+  if (editing) {
+    return (
+      <textarea
+        ref={ref}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={handleKey}
+        aria-label={label}
+        rows={3}
+        className={`w-full resize-none rounded border border-amber-500/40 bg-[#1e1e1e] px-2 py-1.5 text-[11px] text-gray-200 outline-none focus:border-amber-500/70 ${className ?? ""}`}
+      />
+    );
+  }
+
+  return (
+    <button
+      aria-label={`Edit ${label}`}
+      onClick={start}
+      className={`w-full text-left rounded border border-transparent hover:border-neutral-700 px-1 py-0.5 transition-colors group/edit ${className ?? ""}`}
+    >
+      <span className="text-[11px] text-gray-300 leading-relaxed">{value}</span>
+      <span className="ml-1 text-[9px] text-neutral-600 opacity-0 group-hover/edit:opacity-100 transition-opacity uppercase tracking-wider">edit</span>
+    </button>
+  );
+}
 
 // ── Lightbox ──────────────────────────────────────────────
 
@@ -90,6 +168,7 @@ function Lightbox({ src, alt, onClose }: LightboxState & { onClose: () => void }
 
 function FrameImageState({
   imageBase64,
+  imagePath,
   error,
   isGenerating,
   label,
@@ -98,35 +177,72 @@ function FrameImageState({
   aspectRatio,
   onLightbox,
   onRegenerate,
+  history,
+  onRestoreFromHistory,
 }: {
   imageBase64?: string;
+  imagePath?: string;
   error?: string;
   isGenerating?: boolean;
   label: "START" | "END";
   frameNumber: number;
   lyricLine?: string;
   aspectRatio: AspectRatio;
-  onLightbox?: () => void;
+  onLightbox?: (src: string, alt: string) => void;
   onRegenerate?: () => void;
+  history?: string[];
+  onRestoreFromHistory?: (path: string) => void;
 }) {
-  const clickable = !!imageBase64 && !!onLightbox;
+  // Initialise to wherever imagePath sits in history, falling back to the last entry.
+  // The component is keyed on imagePath in parent cards, so it remounts when the
+  // active image changes (new regen or "Use"), keeping this initializer as the only
+  // source of truth and avoiding a setState-inside-effect anti-pattern.
+  const [historyIdx, setHistoryIdx] = useState(() => {
+    if (history && history.length > 0) {
+      const idx = imagePath ? history.lastIndexOf(imagePath) : -1;
+      return idx >= 0 ? idx : history.length - 1;
+    }
+    return 0;
+  });
+
+  const hasHistory = history && history.length > 1;
+  const alt = `${label === "START" ? "Start" : "End"} Frame ${frameNumber}`;
+  // When at the last entry, prefer in-memory base64 to avoid a round-trip to disk.
+  const src = history && history.length > 0
+    ? historyIdx === history.length - 1
+      ? resolveImageSrc(imageBase64, history[historyIdx])
+      : `/api/images/${history[historyIdx]}`
+    : resolveImageSrc(imageBase64, imagePath);
+  // Is the currently-viewed history entry the one marked active (imagePath)?
+  const isActiveEntry = !history || !imagePath || history[historyIdx] === imagePath;
+  const clickable = !!src && !!onLightbox;
 
   return (
     <div
       className={`group/img relative flex-1 flex items-center justify-center bg-gradient-to-br from-indigo-900/40 to-black ${canvasClass(aspectRatio)} ${clickable ? "cursor-zoom-in" : ""}`}
-      onClick={clickable ? onLightbox : undefined}
+      onClick={clickable ? () => onLightbox!(src, alt) : undefined}
     >
-      {imageBase64 ? (
+      {src ? (
         <>
           <Image
-            src={toSrc(imageBase64)}
-            alt={`${label === "START" ? "Start" : "End"} Frame ${frameNumber}`}
+            src={src}
+            alt={alt}
             fill
             sizes="(max-width: 768px) 50vw, 25vw"
             className="object-cover"
             unoptimized
           />
-          {clickable && (
+          {isGenerating ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 pointer-events-none">
+              <div className="relative flex items-center justify-center">
+                <div className="absolute w-10 h-10 rounded-full border-2 border-amber-500/30 animate-ping" />
+                <div
+                  className="w-8 h-8 rounded-full border-2 border-transparent border-t-amber-400"
+                  style={{ animation: "spin 0.8s linear infinite" }}
+                />
+              </div>
+            </div>
+          ) : clickable && (
             <div className="absolute inset-0 bg-black/0 hover:bg-black/25 transition-colors flex items-center justify-center opacity-0 hover:opacity-100 pointer-events-none">
               <ZoomIn className="w-7 h-7 text-white drop-shadow-lg" />
             </div>
@@ -157,9 +273,50 @@ function FrameImageState({
       <div className="absolute top-2 left-2 bg-black/60 text-white font-bold text-[9px] px-1.5 py-0.5 rounded uppercase pointer-events-none">
         {label}
       </div>
-      {label === "START" && lyricLine && (
+      {label === "START" && lyricLine && !hasHistory && (
         <div className="absolute bottom-2 left-2 right-2 pointer-events-none">
           <p className="text-[10px] italic text-amber-200 line-clamp-1">&quot;{lyricLine}&quot;</p>
+        </div>
+      )}
+
+      {/* History navigation — appears on hover when more than one iteration exists */}
+      {hasHistory && (
+        <div className="absolute bottom-2 left-0 right-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity z-10">
+          <div
+            className="flex items-center gap-1 bg-black/80 rounded-full px-2 py-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              aria-label="Previous iteration"
+              disabled={historyIdx === 0}
+              onClick={() => setHistoryIdx((i) => Math.max(0, i - 1))}
+              className="disabled:opacity-30 hover:text-amber-400 transition-colors"
+            >
+              <ChevronLeft className="w-3 h-3 text-white" />
+            </button>
+            <span className="text-[9px] font-bold tabular-nums select-none text-white">
+              {historyIdx + 1}/{history.length}
+            </span>
+            {isActiveEntry && (
+              <span className="text-[9px] text-amber-400" title="Active">✓</span>
+            )}
+            <button
+              aria-label="Next iteration"
+              disabled={historyIdx === history.length - 1}
+              onClick={() => setHistoryIdx((i) => Math.min(history.length - 1, i + 1))}
+              className="disabled:opacity-30 hover:text-amber-400 transition-colors"
+            >
+              <ChevronRight className="w-3 h-3 text-white" />
+            </button>
+            {!isActiveEntry && onRestoreFromHistory && (
+              <button
+                onClick={() => onRestoreFromHistory(history[historyIdx])}
+                className="ml-1 text-[9px] font-bold text-amber-400 hover:text-amber-300 uppercase tracking-wide transition-colors"
+              >
+                Use
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -230,37 +387,40 @@ function CardFooter({
   idx,
   expanded,
   onToggleDescription,
+  onUpdateFrame,
 }: {
   frame: FrameData;
   idx: number;
   expanded: boolean;
   onToggleDescription: (idx: number) => void;
+  onUpdateFrame: (frameIdx: number, updates: Partial<FrameData>) => void;
 }) {
   return (
     <>
-      <button
-        onClick={() => {
-          navigator.clipboard.writeText(frame.flow_prompt);
-          alert("Flow prompt copied!");
-        }}
-        className="w-full text-left p-2 bg-amber-500/10 border border-amber-500/30 rounded cursor-pointer hover:bg-amber-500/20 transition-colors group/flow"
-      >
+      <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded">
         <div className="text-[9px] font-bold text-amber-500 uppercase tracking-widest mb-1 flex items-center justify-between">
           Flow Prompt
-          <Copy className="w-3 h-3 opacity-0 group-hover/flow:opacity-100 transition-opacity" />
+          <button
+            aria-label="Copy flow prompt"
+            onClick={() => { navigator.clipboard.writeText(frame.flow_prompt); }}
+            className="opacity-40 hover:opacity-100 transition-opacity"
+          >
+            <Copy className="w-3 h-3" />
+          </button>
         </div>
-        <div className="text-[11px] text-gray-300 font-medium">{frame.flow_prompt}</div>
-      </button>
+        <EditableText
+          value={frame.flow_prompt}
+          onCommit={(v) => onUpdateFrame(idx, { flow_prompt: v })}
+          label="flow prompt"
+        />
+      </div>
 
       <div className="flex gap-2">
         <button
-          onClick={() => {
-            navigator.clipboard.writeText(frame.image_prompt);
-            alert("Image prompt copied!");
-          }}
+          onClick={() => { navigator.clipboard.writeText(frame.image_prompt); }}
           className="flex-1 py-1.5 border border-[#2a2a2a] hover:border-amber-500 text-[9px] font-bold uppercase rounded transition-colors"
         >
-          Copy Prompt
+          Copy Image Prompt
         </button>
         <button
           aria-label={expanded ? "Collapse image prompt" : "Expand image prompt"}
@@ -277,8 +437,14 @@ function CardFooter({
       </div>
 
       {expanded && (
-        <div className="text-[10px] text-gray-400 bg-neutral-900/60 p-2 rounded border border-white/10 break-all font-mono">
-          {frame.image_prompt}
+        <div className="bg-neutral-900/60 p-2 rounded border border-white/10">
+          <div className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Image Prompt</div>
+          <EditableText
+            value={frame.image_prompt}
+            onCommit={(v) => onUpdateFrame(idx, { image_prompt: v })}
+            label="image prompt"
+            className="font-mono"
+          />
         </div>
       )}
     </>
@@ -297,6 +463,7 @@ function VerticalFrameCard({
   onToggleDescription,
   onLightbox,
   onRegenerateFrame,
+  onUpdateFrame,
 }: {
   frame: FrameData;
   idx: number;
@@ -305,6 +472,7 @@ function VerticalFrameCard({
   onToggleDescription: (idx: number) => void;
   onLightbox: (src: string, alt: string) => void;
   onRegenerateFrame: (frameIdx: number, side: "start" | "end") => void;
+  onUpdateFrame: (frameIdx: number, updates: Partial<FrameData>) => void;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -313,36 +481,36 @@ function VerticalFrameCard({
         {/* Image pair — stacked full-width so thumbnails are as large as possible */}
         <div className="flex flex-col w-full">
           <FrameImageState
+            key={frame.startImagePath ?? `start-${frame.frame_number}`}
             imageBase64={frame.startImageBase64}
+            imagePath={frame.startImagePath}
             error={frame.error}
-            isGenerating={frame.isGenerating}
+            isGenerating={frame.isGeneratingStart}
             label="START"
             frameNumber={frame.frame_number}
             lyricLine={frame.lyric_line}
             aspectRatio={aspectRatio}
-            onLightbox={
-              frame.startImageBase64
-                ? () => onLightbox(frame.startImageBase64!, `Start Frame ${frame.frame_number}`)
-                : undefined
-            }
+            onLightbox={onLightbox}
             onRegenerate={() => onRegenerateFrame(idx, "start")}
+            history={frame.startImageHistory}
+            onRestoreFromHistory={(path) => onUpdateFrame(idx, { startImagePath: path, startImageBase64: undefined })}
           />
           <div className="h-5 flex items-center justify-center bg-[#171717] border-y border-[#2a2a2a] shrink-0">
             <span className="text-amber-500 font-bold text-xs">↓</span>
           </div>
           <FrameImageState
+            key={frame.endImagePath ?? `end-${frame.frame_number}`}
             imageBase64={frame.endImageBase64}
+            imagePath={frame.endImagePath}
             error={frame.error}
-            isGenerating={frame.isGenerating}
+            isGenerating={frame.isGeneratingEnd}
             label="END"
             frameNumber={frame.frame_number}
             aspectRatio={aspectRatio}
-            onLightbox={
-              frame.endImageBase64
-                ? () => onLightbox(frame.endImageBase64!, `End Frame ${frame.frame_number}`)
-                : undefined
-            }
+            onLightbox={onLightbox}
             onRegenerate={() => onRegenerateFrame(idx, "end")}
+            history={frame.endImageHistory}
+            onRestoreFromHistory={(path) => onUpdateFrame(idx, { endImagePath: path, endImageBase64: undefined })}
           />
         </div>
 
@@ -410,10 +578,18 @@ function VerticalFrameCard({
             <div className="flex flex-col gap-1.5 pt-1 border-t border-[#2a2a2a]">
               <p className="text-[10px] text-gray-400 leading-relaxed">{frame.scene_description}</p>
               <div className="text-[9px] font-bold text-amber-500 uppercase tracking-widest">Flow Prompt</div>
-              <p className="text-[10px] text-gray-300">{frame.flow_prompt}</p>
-              <div className="text-[9px] text-gray-500 bg-neutral-900/60 p-1.5 rounded border border-white/10 break-all font-mono">
-                {frame.image_prompt}
-              </div>
+              <EditableText
+                value={frame.flow_prompt}
+                onCommit={(v) => onUpdateFrame(idx, { flow_prompt: v })}
+                label="flow prompt"
+              />
+              <div className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Image Prompt</div>
+              <EditableText
+                value={frame.image_prompt}
+                onCommit={(v) => onUpdateFrame(idx, { image_prompt: v })}
+                label="image prompt"
+                className="font-mono"
+              />
             </div>
           )}
         </div>
@@ -432,6 +608,7 @@ function HorizontalFrameCard({
   onToggleDescription,
   onLightbox,
   onRegenerateFrame,
+  onUpdateFrame,
 }: {
   frame: FrameData;
   idx: number;
@@ -440,6 +617,7 @@ function HorizontalFrameCard({
   onToggleDescription: (idx: number) => void;
   onLightbox: (src: string, alt: string) => void;
   onRegenerateFrame: (frameIdx: number, side: "start" | "end") => void;
+  onUpdateFrame: (frameIdx: number, updates: Partial<FrameData>) => void;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -448,36 +626,36 @@ function HorizontalFrameCard({
         {/* Left: stacked image pair */}
         <div className="w-2/5 flex-shrink-0 flex flex-col border-r border-[#2a2a2a]">
           <FrameImageState
+            key={frame.startImagePath ?? `start-${frame.frame_number}`}
             imageBase64={frame.startImageBase64}
+            imagePath={frame.startImagePath}
             error={frame.error}
-            isGenerating={frame.isGenerating}
+            isGenerating={frame.isGeneratingStart}
             label="START"
             frameNumber={frame.frame_number}
             lyricLine={frame.lyric_line}
             aspectRatio={aspectRatio}
-            onLightbox={
-              frame.startImageBase64
-                ? () => onLightbox(frame.startImageBase64!, `Start Frame ${frame.frame_number}`)
-                : undefined
-            }
+            onLightbox={onLightbox}
             onRegenerate={() => onRegenerateFrame(idx, "start")}
+            history={frame.startImageHistory}
+            onRestoreFromHistory={(path) => onUpdateFrame(idx, { startImagePath: path, startImageBase64: undefined })}
           />
           <div className="h-5 flex items-center justify-center bg-[#171717] border-y border-[#2a2a2a] shrink-0">
             <span className="text-amber-500 font-bold text-xs">↓</span>
           </div>
           <FrameImageState
+            key={frame.endImagePath ?? `end-${frame.frame_number}`}
             imageBase64={frame.endImageBase64}
+            imagePath={frame.endImagePath}
             error={frame.error}
-            isGenerating={frame.isGenerating}
+            isGenerating={frame.isGeneratingEnd}
             label="END"
             frameNumber={frame.frame_number}
             aspectRatio={aspectRatio}
-            onLightbox={
-              frame.endImageBase64
-                ? () => onLightbox(frame.endImageBase64!, `End Frame ${frame.frame_number}`)
-                : undefined
-            }
+            onLightbox={onLightbox}
             onRegenerate={() => onRegenerateFrame(idx, "end")}
+            history={frame.endImageHistory}
+            onRestoreFromHistory={(path) => onUpdateFrame(idx, { endImagePath: path, endImageBase64: undefined })}
           />
         </div>
 
@@ -492,6 +670,7 @@ function HorizontalFrameCard({
             idx={idx}
             expanded={expanded}
             onToggleDescription={onToggleDescription}
+            onUpdateFrame={onUpdateFrame}
           />
         </div>
       </div>
@@ -508,6 +687,7 @@ export function StoryboardGrid({
   onToggleDescription,
   cardLayout,
   onRegenerateFrame,
+  onUpdateFrame,
 }: StoryboardGridProps) {
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
 
@@ -536,6 +716,7 @@ export function StoryboardGrid({
               onToggleDescription={onToggleDescription}
               onLightbox={openLightbox}
               onRegenerateFrame={onRegenerateFrame}
+              onUpdateFrame={onUpdateFrame}
             />
           ) : (
             <VerticalFrameCard
@@ -547,6 +728,7 @@ export function StoryboardGrid({
               onToggleDescription={onToggleDescription}
               onLightbox={openLightbox}
               onRegenerateFrame={onRegenerateFrame}
+              onUpdateFrame={onUpdateFrame}
             />
           )
         )}
