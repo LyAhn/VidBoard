@@ -46,8 +46,9 @@ export function ProjectCard({ project, onOpen, onDelete }: ProjectCardProps) {
   return (
     <div className="group glass rounded-xl overflow-hidden flex flex-col cursor-pointer hover:border-neutral-600 transition-colors border border-transparent">
       {/* Thumbnail */}
-      <div
-        className="relative aspect-video bg-neutral-900 overflow-hidden"
+      <button
+        type="button"
+        className="relative aspect-video bg-neutral-900 overflow-hidden block w-full"
         onClick={() => onOpen(project.id)}
       >
         {project.thumbnailImagePath ? (
@@ -67,11 +68,11 @@ export function ProjectCard({ project, onOpen, onDelete }: ProjectCardProps) {
             Open Project
           </span>
         </div>
-      </div>
+      </button>
 
       {/* Info */}
       <div className="px-3 py-2.5 flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1" onClick={() => onOpen(project.id)}>
+        <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onOpen(project.id)}>
           <p className="text-sm font-semibold text-[#e5e5e5] truncate">{project.name}</p>
           <p className="text-[10px] text-neutral-500 truncate mt-0.5">
             {project.artistName && project.trackTitle
@@ -81,7 +82,7 @@ export function ProjectCard({ project, onOpen, onDelete }: ProjectCardProps) {
           <p className="text-[9px] text-neutral-600 mt-1 uppercase tracking-wider font-medium">
             {relativeTime}
           </p>
-        </div>
+        </button>
         <button
           aria-label="Delete project"
           onClick={(e) => { e.stopPropagation(); onDelete(project.id); }}

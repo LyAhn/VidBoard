@@ -53,6 +53,7 @@ export default function VidBoardApp() {
   const [isDirty, setIsDirty] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [state, setState] = useState<AppState>(initialState);
+  const latestStateRef = useRef<AppState>(initialState);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Record<number, boolean>>({});
   const [planningElapsed, setPlanningElapsed] = useState(0);
   const [planningStepIndex, setPlanningStepIndex] = useState(0);
@@ -61,7 +62,11 @@ export default function VidBoardApp() {
   const hasLoadedSavedState = useRef(false);
 
   const updateState = (updates: Partial<AppState>) => {
-    setState((prev) => ({ ...prev, ...updates }));
+    setState((prev) => {
+      const next = { ...prev, ...updates };
+      latestStateRef.current = next;
+      return next;
+    });
     setIsDirty(true);
   };
 
@@ -93,7 +98,7 @@ export default function VidBoardApp() {
         currentState.artistName && currentState.trackTitle
           ? `${currentState.artistName} — ${currentState.trackTitle}`
           : currentState.artistName || currentState.trackTitle || "Untitled Project";
-      const name = explicitName || derived;
+      const name = explicitName?.trim() || projectName.trim() || derived;
 
       const stateJson = serialiseState(currentState);
       setSaveStatus("saving");
@@ -122,7 +127,7 @@ export default function VidBoardApp() {
         throw err;
       }
     },
-    [serialiseState]
+    [serialiseState, projectName]
   );
 
   // ── Load a project from DB ────────────────────────────────────────────────────────
@@ -130,7 +135,7 @@ export default function VidBoardApp() {
     try {
       const project = await loadProject(id);
       const loaded = JSON.parse(project.stateJson) as Partial<AppState>;
-      setState({
+      const loadedState: AppState = {
         ...initialState,
         artistName: loaded.artistName ?? "",
         trackTitle: loaded.trackTitle ?? "",
@@ -144,7 +149,9 @@ export default function VidBoardApp() {
         visualBible: loaded.visualBible ?? null,
         characterReferenceImage: loaded.characterReferenceImage ?? null,
         frames: (loaded.frames ?? []).map((f) => ({ ...f, isGeneratingStart: false, isGeneratingEnd: false, error: undefined })),
-      });
+      };
+      latestStateRef.current = loadedState;
+      setState(loadedState);
       setProjectId(id);
       setProjectName(project.name);
       setExpandedDescriptions({});
@@ -200,12 +207,14 @@ export default function VidBoardApp() {
   };
 
   const updateFrame = (idx: number, updates: Partial<FrameData>) => {
-    setState((prev) => ({
-      ...prev,
-      frames: prev.frames.map((frame, frameIdx) =>
+    setState((prev) => {
+      const frames = prev.frames.map((frame, frameIdx) =>
         frameIdx === idx ? { ...frame, ...updates } : frame
-      ),
-    }));
+      );
+      const next = { ...prev, frames };
+      latestStateRef.current = next;
+      return next;
+    });
     setIsDirty(true);
   };
 
@@ -247,7 +256,7 @@ export default function VidBoardApp() {
 
     for (let index = 0; index < frames.length; index++) {
       const frame = frames[index];
-      if (frame.startImageBase64 && frame.endImageBase64 && !frame.error) {
+      if ((frame.startImageBase64 || frame.startImagePath) && (frame.endImageBase64 || frame.endImagePath) && !frame.error) {
         continue;
       }
 
@@ -322,10 +331,7 @@ export default function VidBoardApp() {
     });
 
     // Auto-save after generation completes
-    setState((prev) => {
-      saveCurrentProject(prev, currentProjectId).catch(console.error);
-      return prev;
-    });
+    saveCurrentProject(latestStateRef.current, currentProjectId).catch(console.error);
   };
 
   const handleGenerate = async () => {
@@ -380,10 +386,11 @@ export default function VidBoardApp() {
       // updateState marks dirty, so call setState directly then save manually
       setState((prev) => {
         const merged = { ...prev, ...nextState };
-        saveCurrentProject(merged, projectId).catch(console.error);
+        latestStateRef.current = merged;
         return merged;
       });
       setIsDirty(false);
+      saveCurrentProject(latestStateRef.current, projectId).catch(console.error);
     } catch (error) {
       updateState({
         error: error instanceof Error ? error.message : "Failed to plan storyboard.",
@@ -460,10 +467,7 @@ export default function VidBoardApp() {
       }
       freeComfyMemory().catch(() => undefined);
       // Auto-save so the new image path is persisted immediately
-      setState((prev) => {
-        saveCurrentProject(prev, currentProjectId).catch(console.error);
-        return prev;
-      });
+      saveCurrentProject(latestStateRef.current, currentProjectId).catch(console.error);
     } catch (error) {
       updateFrame(frameIdx, {
         isGeneratingStart: false,
@@ -485,7 +489,7 @@ export default function VidBoardApp() {
 
     const recoveredFrames = await Promise.all(
       state.frames.map(async (frame) => {
-        if (!frame.error && frame.startImageBase64 && frame.endImageBase64) {
+        if (!frame.error && (frame.startImageBase64 || frame.startImagePath) && (frame.endImageBase64 || frame.endImagePath)) {
           return frame;
         }
 
@@ -544,6 +548,7 @@ export default function VidBoardApp() {
   };
 
   const handleNewProject = () => {
+    latestStateRef.current = initialState;
     setState(initialState);
     setProjectId(null);
     setProjectName("");
@@ -679,7 +684,7 @@ export default function VidBoardApp() {
           {state.frames.length > 0 &&
             !state.isPlanning &&
             !state.isGeneratingImages &&
-            !state.frames.some((f) => f.startImageBase64 || f.endImageBase64 || f.isGeneratingStart || f.isGeneratingEnd) && (
+            !state.frames.some((f) => f.startImageBase64 || f.startImagePath || f.endImageBase64 || f.endImagePath || f.isGeneratingStart || f.isGeneratingEnd) && (
               <div className="rounded-xl border border-[#2a2a2a] bg-[#0d0d0d] p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-[#e5e5e5] mb-1">Blueprint ready</p>

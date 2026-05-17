@@ -69,8 +69,10 @@ function EditableText({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const cancelledRef = useRef(false);
 
   const start = () => {
+    cancelledRef.current = false;
     setDraft(value);
     setEditing(true);
     setTimeout(() => {
@@ -80,12 +82,13 @@ function EditableText({
   };
 
   const commit = () => {
+    if (cancelledRef.current) return;
     setEditing(false);
     if (draft.trim() !== value.trim()) onCommit(draft.trim());
   };
 
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Escape") { setEditing(false); setDraft(value); }
+    if (e.key === "Escape") { cancelledRef.current = true; setEditing(false); setDraft(value); }
     if (e.key === "Enter" && e.ctrlKey) commit();
   };
 

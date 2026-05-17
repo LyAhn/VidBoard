@@ -37,14 +37,17 @@ export function StoryboardToolbar({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const cancelledRef = useRef(false);
 
   const startEdit = () => {
+    cancelledRef.current = false;
     setDraft(projectName);
     setEditing(true);
     setTimeout(() => inputRef.current?.select(), 0);
   };
 
   const commitEdit = () => {
+    if (cancelledRef.current) return;
     setEditing(false);
     if (draft.trim() && draft.trim() !== projectName) {
       onRenameProject(draft.trim());
@@ -53,7 +56,7 @@ export function StoryboardToolbar({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") commitEdit();
-    if (e.key === "Escape") setEditing(false);
+    if (e.key === "Escape") { cancelledRef.current = true; setEditing(false); }
   };
 
   return (
