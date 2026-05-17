@@ -10,10 +10,16 @@ const nextConfig: NextConfig = {
   },
   transpilePackages: ['motion'],
   webpack: (config, { dev }) => {
-    if (dev && process.env.DISABLE_HMR === 'true') {
-      config.watchOptions = {
-        ignored: /.*/,
-      };
+    if (dev) {
+      if (process.env.DISABLE_HMR === 'true') {
+        config.watchOptions = { ignored: /.*/ };
+      } else {
+        // Native fs watchers are unreliable on Windows — use polling instead
+        config.watchOptions = {
+          poll: 500,
+          aggregateTimeout: 200,
+        };
+      }
     }
     return config;
   },

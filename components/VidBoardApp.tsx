@@ -13,6 +13,7 @@ import { exportStoryboardPdf } from "@/lib/export-pdf";
 import { exportStoryboardZip } from "@/lib/export-zip";
 import { buildEndFramePrompt, buildStartFramePrompt } from "@/lib/storyboard-prompts";
 import type { AppState, FrameData } from "@/lib/vidboard-types";
+import type { CardLayout } from "@/components/StoryboardGrid";
 import { ArtistContextCard } from "@/components/ArtistContextCard";
 import { CinematicLoader } from "@/components/PlanningLoader";
 import { planningSteps } from "@/components/PlanningProgress";
@@ -45,6 +46,7 @@ export default function VidBoardApp() {
   const [expandedDescriptions, setExpandedDescriptions] = useState<Record<number, boolean>>({});
   const [planningElapsed, setPlanningElapsed] = useState(0);
   const [planningStepIndex, setPlanningStepIndex] = useState(0);
+  const [cardLayout, setCardLayout] = useState<CardLayout>("vertical");
   const mainAreaRef = useRef<HTMLDivElement>(null);
   const hasLoadedSavedState = useRef(false);
 
@@ -78,6 +80,11 @@ export default function VidBoardApp() {
         } catch (error) {
           console.error("Failed to parse saved state", error);
         }
+      }
+
+      const savedLayout = window.localStorage.getItem("vidboard_card_layout");
+      if (savedLayout === "horizontal" || savedLayout === "vertical") {
+        setCardLayout(savedLayout);
       }
 
       hasLoadedSavedState.current = true;
@@ -129,6 +136,15 @@ export default function VidBoardApp() {
     state.visualBible,
     state.frames,
   ]);
+
+  useEffect(() => {
+    if (!hasLoadedSavedState.current) return;
+    try {
+      window.localStorage.setItem("vidboard_card_layout", cardLayout);
+    } catch (error) {
+      console.warn("Storage error", error);
+    }
+  }, [cardLayout]);
 
   useEffect(() => {
     if (!state.isPlanning) return;
@@ -306,6 +322,63 @@ export default function VidBoardApp() {
     }
   };
 
+  const regenerateSingleFrame = async (frameIdx: number, side: "start" | "end") => {
+    const frame = state.frames[frameIdx];
+    if (!frame || !state.visualBible) return;
+
+    updateFrame(frameIdx, { isGenerating: true, error: undefined });
+
+    try {
+      const referenceImageBase64 = state.characterReferenceImage;
+      const useReferenceWorkflow = frame.character_present && Boolean(referenceImageBase64);
+
+      if (useReferenceWorkflow && side === "start") {
+        const workflowInfo = await getWorkflowInfo();
+        if (!workflowInfo.start.capabilities.referenceImage) {
+          updateFrame(frameIdx, {
+            isGenerating: false,
+            error: `The selected Start workflow "${workflowInfo.start.workflow}" cannot use the character reference image.`,
+          });
+          return;
+        }
+      }
+      const frameRef = useReferenceWorkflow ? referenceImageBase64 : undefined;
+
+      if (side === "start") {
+        const startData = await requestGeneratedImage({
+          prompt: buildStartFramePrompt(frame, state.visualBible),
+          kind: "start",
+          aspectRatio: state.aspectRatio,
+          referenceImageBase64: frameRef,
+          workflow: useReferenceWorkflow ? undefined : "flux2-klein-txt2img",
+        });
+        updateFrame(frameIdx, {
+          startImageBase64: startData.imageBase64,
+          startPromptId: startData.promptId,
+          isGenerating: false,
+        });
+      } else {
+        const endData = await requestGeneratedImage({
+          prompt: buildEndFramePrompt(frame, state.visualBible),
+          kind: "end",
+          aspectRatio: state.aspectRatio,
+          referenceImageBase64: frameRef,
+          workflow: useReferenceWorkflow ? "flux2-klein-reference" : "flux2-klein-txt2img",
+        });
+        updateFrame(frameIdx, {
+          endImageBase64: endData.imageBase64,
+          endPromptId: endData.promptId,
+          isGenerating: false,
+        });
+      }
+    } catch (error) {
+      updateFrame(frameIdx, {
+        isGenerating: false,
+        error: error instanceof Error ? error.message : "Regeneration failed.",
+      });
+    }
+  };
+
   const handleGenerateImages = async () => {
     if (!state.visualBible || !state.frames.length) return;
     await generateFrameImages(state.frames, state.visualBible, state.characterReferenceImage);
@@ -376,7 +449,7 @@ export default function VidBoardApp() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-[#050505] font-sans text-[#e5e5e5]">
+    <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-[#111111] font-sans text-[#e5e5e5]">
       <VidBoardSidebar
         state={state}
         planningElapsed={planningElapsed}
@@ -385,10 +458,12 @@ export default function VidBoardApp() {
         updateState={updateState}
       />
 
-      <div className="flex-1 overflow-y-auto flex flex-col relative bg-[#050505]" ref={mainAreaRef}>
+      <div className="flex-1 overflow-y-auto flex flex-col relative bg-[#111111]" ref={mainAreaRef}>
         <StoryboardToolbar
           frames={state.frames}
           isGeneratingImages={state.isGeneratingImages}
+          cardLayout={cardLayout}
+          onCardLayoutChange={setCardLayout}
           onRetryImages={handleRetryImages}
           onExportPdf={() =>
             exportStoryboardPdf({
@@ -475,6 +550,8 @@ export default function VidBoardApp() {
             aspectRatio={state.aspectRatio}
             expandedDescriptions={expandedDescriptions}
             onToggleDescription={toggleDescription}
+            cardLayout={cardLayout}
+            onRegenerateFrame={regenerateSingleFrame}
           />
         </div>
 

@@ -57,14 +57,14 @@ function StageList({ stepIndex }: { stepIndex: number }) {
             style={{
               width: 6,
               height: 6,
-              background: idx < stepIndex ? "#78350f" : idx === stepIndex ? "#fbbf24" : "#1c1c1c",
+              background: idx < stepIndex ? "#78350f" : idx === stepIndex ? "#fbbf24" : "#303030",
               animation: idx === stepIndex ? "amber-glow 1.8s ease-in-out infinite" : undefined,
             }}
           />
           <span
             className="text-sm transition-colors duration-500"
             style={{
-              color: idx < stepIndex ? "#404040" : idx === stepIndex ? "#fef3c7" : "#2a2a2a",
+              color: idx < stepIndex ? "#525252" : idx === stepIndex ? "#fef3c7" : "#444444",
               fontWeight: idx === stepIndex ? 500 : 400,
             }}
           >
@@ -86,7 +86,7 @@ function StageList({ stepIndex }: { stepIndex: number }) {
 //   FRAME_W + FRAME_GAP = 88px per slot (both copies identical)
 //   Total strip width   = FRAME_COUNT × 2 × 88px
 //   filmScroll keyframe = exactly FRAME_COUNT × 88px  →  no jump on repeat
-const FRAME_COUNT = 16;
+const FRAME_COUNT = 24;
 const FRAME_W = 80; // px
 const FRAME_GAP = 8; // px — marginRight so every slot contributes equally to width
 
@@ -122,7 +122,7 @@ export function CinematicLoader({ elapsed, stepIndex }: PlanningLoaderProps) {
                 className="border border-neutral-800 rounded-sm"
                 style={{
                   height: 44,
-                  background: `linear-gradient(${(frameIdx * 67 + 13) % 360}deg, #0a0a0a 0%, #171717 100%)`,
+                  background: `linear-gradient(${(frameIdx * 67 + 13) % 360}deg, #171717 0%, #1e1e1e 100%)`,
                 }}
               />
               <div className="flex justify-around mt-1">
@@ -136,11 +136,11 @@ export function CinematicLoader({ elapsed, stepIndex }: PlanningLoaderProps) {
         {/* Fade edges */}
         <div
           className="absolute inset-y-0 left-0 w-24 pointer-events-none"
-          style={{ background: "linear-gradient(to right, #050505, transparent)" }}
+          style={{ background: "linear-gradient(to right, #111111, transparent)" }}
         />
         <div
           className="absolute inset-y-0 right-0 w-24 pointer-events-none"
-          style={{ background: "linear-gradient(to left, #050505, transparent)" }}
+          style={{ background: "linear-gradient(to left, #111111, transparent)" }}
         />
       </div>
 
