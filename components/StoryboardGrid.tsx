@@ -63,6 +63,7 @@ function Lightbox({ src, alt, onClose }: LightboxState & { onClose: () => void }
       onClick={onClose}
     >
       <button
+        aria-label="Close lightbox"
         className="absolute top-4 right-4 bg-neutral-800 hover:bg-neutral-700 rounded-full p-2 transition-colors cursor-pointer"
         onClick={onClose}
       >
@@ -164,9 +165,9 @@ function FrameImageState({
 
       {onRegenerate && !isGenerating && (
         <button
+          aria-label={`Regenerate ${label.toLowerCase()} frame`}
           onClick={(e) => { e.stopPropagation(); onRegenerate(); }}
-          title={`Regenerate ${label.toLowerCase()} frame`}
-          className="absolute top-2 right-2 opacity-0 group-hover/img:opacity-100 transition-opacity bg-black/70 hover:bg-black/90 rounded p-1 z-10"
+          className="absolute top-2 right-2 opacity-0 group-hover/img:opacity-100 group-focus-within/img:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500 transition-opacity bg-black/70 hover:bg-black/90 rounded p-1 z-10"
         >
           <RefreshCw className="w-3 h-3 text-white" />
         </button>
@@ -262,9 +263,10 @@ function CardFooter({
           Copy Prompt
         </button>
         <button
+          aria-label={expanded ? "Collapse image prompt" : "Expand image prompt"}
+          aria-expanded={expanded}
           className="p-1.5 border border-[#2a2a2a] hover:border-amber-500 rounded transition-colors"
           onClick={() => onToggleDescription(idx)}
-          title="Toggle full image prompt"
         >
           {expanded ? (
             <ChevronDown className="w-3 h-3 text-gray-400" />
@@ -389,9 +391,10 @@ function VerticalFrameCard({
                 IMG
               </button>
               <button
+                aria-label={expanded ? "Collapse details" : "Expand details"}
+                aria-expanded={expanded}
                 className="p-1 border border-[#2a2a2a] hover:border-amber-500 rounded transition-colors"
                 onClick={() => onToggleDescription(idx)}
-                title="Toggle details"
               >
                 {expanded ? (
                   <ChevronDown className="w-3 h-3 text-gray-500" />

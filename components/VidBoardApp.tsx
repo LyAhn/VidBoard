@@ -138,7 +138,12 @@ export default function VidBoardApp() {
   ]);
 
   useEffect(() => {
-    window.localStorage.setItem("vidboard_card_layout", cardLayout);
+    if (!hasLoadedSavedState.current) return;
+    try {
+      window.localStorage.setItem("vidboard_card_layout", cardLayout);
+    } catch (error) {
+      console.warn("Storage error", error);
+    }
   }, [cardLayout]);
 
   useEffect(() => {
@@ -326,6 +331,17 @@ export default function VidBoardApp() {
     try {
       const referenceImageBase64 = state.characterReferenceImage;
       const useReferenceWorkflow = frame.character_present && Boolean(referenceImageBase64);
+
+      if (useReferenceWorkflow && side === "start") {
+        const workflowInfo = await getWorkflowInfo();
+        if (!workflowInfo.start.capabilities.referenceImage) {
+          updateFrame(frameIdx, {
+            isGenerating: false,
+            error: `The selected Start workflow "${workflowInfo.start.workflow}" cannot use the character reference image.`,
+          });
+          return;
+        }
+      }
       const frameRef = useReferenceWorkflow ? referenceImageBase64 : undefined;
 
       if (side === "start") {

@@ -37,8 +37,9 @@ export function StoryboardToolbar({
         {/* Layout toggle */}
         <div className="flex items-center gap-1 bg-[#1c1c1c] border border-[#2a2a2a] rounded p-0.5">
           <button
+            aria-label="Switch to grid view"
+            aria-pressed={cardLayout === "vertical"}
             onClick={() => onCardLayoutChange("vertical")}
-            title="Grid view"
             className={`p-1.5 rounded transition-colors ${
               cardLayout === "vertical"
                 ? "bg-amber-500 text-black"
@@ -48,8 +49,9 @@ export function StoryboardToolbar({
             <LayoutGrid className="w-3.5 h-3.5" />
           </button>
           <button
+            aria-label="Switch to list view"
+            aria-pressed={cardLayout === "horizontal"}
             onClick={() => onCardLayoutChange("horizontal")}
-            title="List view"
             className={`p-1.5 rounded transition-colors ${
               cardLayout === "horizontal"
                 ? "bg-amber-500 text-black"
