@@ -10,14 +10,36 @@ interface ExportPdfOptions {
   frames: FrameData[];
 }
 
-export const exportStoryboardPdf = ({
+const fetchImageAsDataUrl = async (path: string): Promise<string | null> => {
+  try {
+    const res = await fetch(`/api/images/${path}`);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+};
+
+const resolveImageDataUrl = async (base64?: string, path?: string): Promise<string | null> => {
+  if (base64) return base64.includes("data:image") ? base64 : `data:image/png;base64,${base64}`;
+  if (path) return fetchImageAsDataUrl(path);
+  return null;
+};
+
+export const exportStoryboardPdf = async ({
   artistName,
   trackTitle,
   theme,
   aspectRatio,
   visualBible,
   frames,
-}: ExportPdfOptions) => {
+}: ExportPdfOptions): Promise<void> => {
   if (!frames.length) return;
 
   const pdf = new jsPDF("landscape", "mm", "a4");
@@ -143,22 +165,21 @@ export const exportStoryboardPdf = ({
           : { w: 60, h: 60 };
     const imgY = Math.min(y + 4, pageHeight - format.h - 16);
 
-    if (frame.startImageBase64) {
+    const [startDataUrl, endDataUrl] = await Promise.all([
+      resolveImageDataUrl(frame.startImageBase64, frame.startImagePath),
+      resolveImageDataUrl(frame.endImageBase64, frame.endImagePath),
+    ]);
+
+    if (startDataUrl) {
       pdf.setFontSize(9);
       pdf.text("Flow Start Frame", margin, imgY - 2);
-      const dataUrl = frame.startImageBase64.includes("data:image")
-        ? frame.startImageBase64
-        : `data:image/png;base64,${frame.startImageBase64}`;
-      pdf.addImage(dataUrl, "PNG", margin, imgY, format.w, format.h);
+      pdf.addImage(startDataUrl, "PNG", margin, imgY, format.w, format.h);
     }
 
-    if (frame.endImageBase64) {
+    if (endDataUrl) {
       pdf.setFontSize(9);
       pdf.text("Flow End Frame", margin + 135, imgY - 2);
-      const dataUrl = frame.endImageBase64.includes("data:image")
-        ? frame.endImageBase64
-        : `data:image/png;base64,${frame.endImageBase64}`;
-      pdf.addImage(dataUrl, "PNG", margin + 135, imgY, format.w, format.h);
+      pdf.addImage(endDataUrl, "PNG", margin + 135, imgY, format.w, format.h);
     }
   }
 

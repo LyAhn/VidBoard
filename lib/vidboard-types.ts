@@ -20,10 +20,13 @@ export interface FrameData extends FramePlan {
   endImageBase64?: string;
   startImagePath?: string;
   endImagePath?: string;
+  startImageHistory?: string[];
+  endImageHistory?: string[];
   startPromptId?: string;
   endPromptId?: string;
   next_lyric_line?: string;
-  isGenerating?: boolean;
+  isGeneratingStart?: boolean;
+  isGeneratingEnd?: boolean;
   error?: string;
 }
 

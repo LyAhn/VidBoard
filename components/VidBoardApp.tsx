@@ -78,7 +78,8 @@ export default function VidBoardApp() {
           ...f,
           startImageBase64: undefined,
           endImageBase64: undefined,
-          isGenerating: false,
+          isGeneratingStart: false,
+          isGeneratingEnd: false,
           error: undefined,
         })),
       }),
@@ -142,7 +143,7 @@ export default function VidBoardApp() {
         artistContext: loaded.artistContext ?? null,
         visualBible: loaded.visualBible ?? null,
         characterReferenceImage: loaded.characterReferenceImage ?? null,
-        frames: (loaded.frames ?? []).map((f) => ({ ...f, isGenerating: false, error: undefined })),
+        frames: (loaded.frames ?? []).map((f) => ({ ...f, isGeneratingStart: false, isGeneratingEnd: false, error: undefined })),
       });
       setProjectId(id);
       setProjectName(project.name);
@@ -251,7 +252,7 @@ export default function VidBoardApp() {
       }
 
       const frameLabel = `Frame ${index + 1} of ${frames.length}`;
-      updateFrame(index, { isGenerating: true, error: undefined });
+      updateFrame(index, { isGeneratingStart: true, isGeneratingEnd: false, error: undefined });
 
       try {
         const startedAt = Date.now();
@@ -278,6 +279,11 @@ export default function VidBoardApp() {
           startImageBase64: startData.imageBase64,
           startImagePath: startData.imagePath,
           startPromptId: startData.promptId,
+          startImageHistory: startData.imagePath
+            ? [...(frame.startImageHistory ?? []), startData.imagePath]
+            : frame.startImageHistory,
+          isGeneratingStart: false,
+          isGeneratingEnd: true,
         });
 
         updateState({ statusMessage: `${frameLabel}: queuing end image${elapsedLabel()}...` });
@@ -293,11 +299,15 @@ export default function VidBoardApp() {
           endImageBase64: endData.imageBase64,
           endImagePath: endData.imagePath,
           endPromptId: endData.promptId,
-          isGenerating: false,
+          endImageHistory: endData.imagePath
+            ? [...(frame.endImageHistory ?? []), endData.imagePath]
+            : frame.endImageHistory,
+          isGeneratingEnd: false,
         });
       } catch (error) {
         updateFrame(index, {
-          isGenerating: false,
+          isGeneratingStart: false,
+          isGeneratingEnd: false,
           error: error instanceof Error ? error.message : "Image generation failed.",
         });
       }
@@ -356,7 +366,8 @@ export default function VidBoardApp() {
       const plannedFrames = planData.frames.map((frame, index, frames) => ({
         ...frame,
         next_lyric_line: frames[index + 1]?.lyric_line,
-        isGenerating: false,
+        isGeneratingStart: false,
+        isGeneratingEnd: false,
       }));
       const nextState: Partial<AppState> = {
         artistContext: planData.artistContext,
@@ -387,7 +398,11 @@ export default function VidBoardApp() {
     const frame = state.frames[frameIdx];
     if (!frame || !state.visualBible) return;
 
-    updateFrame(frameIdx, { isGenerating: true, error: undefined });
+    updateFrame(frameIdx, {
+      isGeneratingStart: side === "start",
+      isGeneratingEnd: side === "end",
+      error: undefined,
+    });
 
     try {
       const currentProjectId = await ensureProjectId(state);
@@ -398,7 +413,7 @@ export default function VidBoardApp() {
         const workflowInfo = await getWorkflowInfo();
         if (!workflowInfo.start.capabilities.referenceImage) {
           updateFrame(frameIdx, {
-            isGenerating: false,
+            isGeneratingStart: false,
             error: `The selected Start workflow "${workflowInfo.start.workflow}" cannot use the character reference image.`,
           });
           return;
@@ -419,7 +434,10 @@ export default function VidBoardApp() {
           startImageBase64: startData.imageBase64,
           startImagePath: startData.imagePath,
           startPromptId: startData.promptId,
-          isGenerating: false,
+          startImageHistory: startData.imagePath
+            ? [...(frame.startImageHistory ?? (frame.startImagePath ? [frame.startImagePath] : [])), startData.imagePath]
+            : frame.startImageHistory,
+          isGeneratingStart: false,
         });
       } else {
         const endData = await requestGeneratedImage({
@@ -434,9 +452,13 @@ export default function VidBoardApp() {
           endImageBase64: endData.imageBase64,
           endImagePath: endData.imagePath,
           endPromptId: endData.promptId,
-          isGenerating: false,
+          endImageHistory: endData.imagePath
+            ? [...(frame.endImageHistory ?? (frame.endImagePath ? [frame.endImagePath] : [])), endData.imagePath]
+            : frame.endImageHistory,
+          isGeneratingEnd: false,
         });
       }
+      freeComfyMemory().catch(() => undefined);
       // Auto-save so the new image path is persisted immediately
       setState((prev) => {
         saveCurrentProject(prev, currentProjectId).catch(console.error);
@@ -444,7 +466,8 @@ export default function VidBoardApp() {
       });
     } catch (error) {
       updateFrame(frameIdx, {
-        isGenerating: false,
+        isGeneratingStart: false,
+        isGeneratingEnd: false,
         error: error instanceof Error ? error.message : "Regeneration failed.",
       });
     }
@@ -476,7 +499,7 @@ export default function VidBoardApp() {
               updated = { ...updated, startImageBase64: result.imageBase64 };
             } else if (result.status === "pending") {
               // Still running — leave promptId in place so generateFrameImages skips re-queue.
-              return { ...updated, isGenerating: false };
+              return { ...updated, isGeneratingStart: false, isGeneratingEnd: false };
             }
           } catch {
             // Status check failed — will re-queue below.
@@ -490,7 +513,7 @@ export default function VidBoardApp() {
             if (result.status === "done") {
               updated = { ...updated, endImageBase64: result.imageBase64 };
             } else if (result.status === "pending") {
-              return { ...updated, isGenerating: false };
+              return { ...updated, isGeneratingStart: false, isGeneratingEnd: false };
             }
           } catch {
             // Status check failed — will re-queue below.
@@ -504,7 +527,8 @@ export default function VidBoardApp() {
           endImageBase64: updated.endImageBase64,
           startPromptId: updated.startImageBase64 ? updated.startPromptId : undefined,
           endPromptId: updated.endImageBase64 ? updated.endPromptId : undefined,
-          isGenerating: false,
+          isGeneratingStart: false,
+          isGeneratingEnd: false,
         };
       })
     );
@@ -602,7 +626,7 @@ export default function VidBoardApp() {
               aspectRatio: state.aspectRatio,
               visualBible: state.visualBible,
               frames: state.frames,
-            })
+            }).catch(console.error)
           }
           onDownloadZip={() =>
             exportStoryboardZip({
@@ -655,7 +679,7 @@ export default function VidBoardApp() {
           {state.frames.length > 0 &&
             !state.isPlanning &&
             !state.isGeneratingImages &&
-            !state.frames.some((f) => f.startImageBase64 || f.endImageBase64 || f.isGenerating) && (
+            !state.frames.some((f) => f.startImageBase64 || f.endImageBase64 || f.isGeneratingStart || f.isGeneratingEnd) && (
               <div className="rounded-xl border border-[#2a2a2a] bg-[#0d0d0d] p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-[#e5e5e5] mb-1">Blueprint ready</p>

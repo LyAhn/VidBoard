@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Camera,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Copy,
   ImageIcon,
@@ -173,6 +174,8 @@ function FrameImageState({
   aspectRatio,
   onLightbox,
   onRegenerate,
+  history,
+  onRestoreFromHistory,
 }: {
   imageBase64?: string;
   imagePath?: string;
@@ -182,22 +185,50 @@ function FrameImageState({
   frameNumber: number;
   lyricLine?: string;
   aspectRatio: AspectRatio;
-  onLightbox?: () => void;
+  onLightbox?: (src: string, alt: string) => void;
   onRegenerate?: () => void;
+  history?: string[];
+  onRestoreFromHistory?: (path: string) => void;
 }) {
-  const src = resolveImageSrc(imageBase64, imagePath);
+  // Initialise to wherever imagePath sits in history, falling back to the last entry.
+  const [historyIdx, setHistoryIdx] = useState(() => {
+    if (history && history.length > 0) {
+      const idx = imagePath ? history.lastIndexOf(imagePath) : -1;
+      return idx >= 0 ? idx : history.length - 1;
+    }
+    return 0;
+  });
+
+  // Sync when history grows (new regen added) or when the active image changes (Use clicked).
+  useEffect(() => {
+    if (history && history.length > 0) {
+      const idx = imagePath ? history.lastIndexOf(imagePath) : -1;
+      setHistoryIdx(idx >= 0 ? idx : history.length - 1);
+    }
+  }, [history?.length, imagePath]);
+
+  const hasHistory = history && history.length > 1;
+  const alt = `${label === "START" ? "Start" : "End"} Frame ${frameNumber}`;
+  // When at the last entry, prefer in-memory base64 to avoid a round-trip to disk.
+  const src = history && history.length > 0
+    ? historyIdx === history.length - 1
+      ? resolveImageSrc(imageBase64, history[historyIdx])
+      : `/api/images/${history[historyIdx]}`
+    : resolveImageSrc(imageBase64, imagePath);
+  // Is the currently-viewed history entry the one marked active (imagePath)?
+  const isActiveEntry = !history || !imagePath || history[historyIdx] === imagePath;
   const clickable = !!src && !!onLightbox;
 
   return (
     <div
       className={`group/img relative flex-1 flex items-center justify-center bg-gradient-to-br from-indigo-900/40 to-black ${canvasClass(aspectRatio)} ${clickable ? "cursor-zoom-in" : ""}`}
-      onClick={clickable ? onLightbox : undefined}
+      onClick={clickable ? () => onLightbox!(src, alt) : undefined}
     >
       {src ? (
         <>
           <Image
             src={src}
-            alt={`${label === "START" ? "Start" : "End"} Frame ${frameNumber}`}
+            alt={alt}
             fill
             sizes="(max-width: 768px) 50vw, 25vw"
             className="object-cover"
@@ -244,9 +275,50 @@ function FrameImageState({
       <div className="absolute top-2 left-2 bg-black/60 text-white font-bold text-[9px] px-1.5 py-0.5 rounded uppercase pointer-events-none">
         {label}
       </div>
-      {label === "START" && lyricLine && (
+      {label === "START" && lyricLine && !hasHistory && (
         <div className="absolute bottom-2 left-2 right-2 pointer-events-none">
           <p className="text-[10px] italic text-amber-200 line-clamp-1">&quot;{lyricLine}&quot;</p>
+        </div>
+      )}
+
+      {/* History navigation — appears on hover when more than one iteration exists */}
+      {hasHistory && (
+        <div className="absolute bottom-2 left-0 right-0 flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity z-10">
+          <div
+            className="flex items-center gap-1 bg-black/80 rounded-full px-2 py-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              aria-label="Previous iteration"
+              disabled={historyIdx === 0}
+              onClick={() => setHistoryIdx((i) => Math.max(0, i - 1))}
+              className="disabled:opacity-30 hover:text-amber-400 transition-colors"
+            >
+              <ChevronLeft className="w-3 h-3 text-white" />
+            </button>
+            <span className="text-[9px] font-bold tabular-nums select-none text-white">
+              {historyIdx + 1}/{history.length}
+            </span>
+            {isActiveEntry && (
+              <span className="text-[9px] text-amber-400" title="Active">✓</span>
+            )}
+            <button
+              aria-label="Next iteration"
+              disabled={historyIdx === history.length - 1}
+              onClick={() => setHistoryIdx((i) => Math.min(history.length - 1, i + 1))}
+              className="disabled:opacity-30 hover:text-amber-400 transition-colors"
+            >
+              <ChevronRight className="w-3 h-3 text-white" />
+            </button>
+            {!isActiveEntry && onRestoreFromHistory && (
+              <button
+                onClick={() => onRestoreFromHistory(history[historyIdx])}
+                className="ml-1 text-[9px] font-bold text-amber-400 hover:text-amber-300 uppercase tracking-wide transition-colors"
+              >
+                Use
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -414,20 +486,15 @@ function VerticalFrameCard({
             imageBase64={frame.startImageBase64}
             imagePath={frame.startImagePath}
             error={frame.error}
-            isGenerating={frame.isGenerating}
+            isGenerating={frame.isGeneratingStart}
             label="START"
             frameNumber={frame.frame_number}
             lyricLine={frame.lyric_line}
             aspectRatio={aspectRatio}
-            onLightbox={
-              frame.startImageBase64 || frame.startImagePath
-                ? () => onLightbox(
-                    frame.startImageBase64 ?? `/api/images/${frame.startImagePath}`,
-                    `Start Frame ${frame.frame_number}`
-                  )
-                : undefined
-            }
+            onLightbox={onLightbox}
             onRegenerate={() => onRegenerateFrame(idx, "start")}
+            history={frame.startImageHistory}
+            onRestoreFromHistory={(path) => onUpdateFrame(idx, { startImagePath: path, startImageBase64: undefined })}
           />
           <div className="h-5 flex items-center justify-center bg-[#171717] border-y border-[#2a2a2a] shrink-0">
             <span className="text-amber-500 font-bold text-xs">↓</span>
@@ -436,19 +503,14 @@ function VerticalFrameCard({
             imageBase64={frame.endImageBase64}
             imagePath={frame.endImagePath}
             error={frame.error}
-            isGenerating={frame.isGenerating}
+            isGenerating={frame.isGeneratingEnd}
             label="END"
             frameNumber={frame.frame_number}
             aspectRatio={aspectRatio}
-            onLightbox={
-              frame.endImageBase64 || frame.endImagePath
-                ? () => onLightbox(
-                    frame.endImageBase64 ?? `/api/images/${frame.endImagePath}`,
-                    `End Frame ${frame.frame_number}`
-                  )
-                : undefined
-            }
+            onLightbox={onLightbox}
             onRegenerate={() => onRegenerateFrame(idx, "end")}
+            history={frame.endImageHistory}
+            onRestoreFromHistory={(path) => onUpdateFrame(idx, { endImagePath: path, endImageBase64: undefined })}
           />
         </div>
 
@@ -567,20 +629,15 @@ function HorizontalFrameCard({
             imageBase64={frame.startImageBase64}
             imagePath={frame.startImagePath}
             error={frame.error}
-            isGenerating={frame.isGenerating}
+            isGenerating={frame.isGeneratingStart}
             label="START"
             frameNumber={frame.frame_number}
             lyricLine={frame.lyric_line}
             aspectRatio={aspectRatio}
-            onLightbox={
-              frame.startImageBase64 || frame.startImagePath
-                ? () => onLightbox(
-                    frame.startImageBase64 ?? `/api/images/${frame.startImagePath}`,
-                    `Start Frame ${frame.frame_number}`
-                  )
-                : undefined
-            }
+            onLightbox={onLightbox}
             onRegenerate={() => onRegenerateFrame(idx, "start")}
+            history={frame.startImageHistory}
+            onRestoreFromHistory={(path) => onUpdateFrame(idx, { startImagePath: path, startImageBase64: undefined })}
           />
           <div className="h-5 flex items-center justify-center bg-[#171717] border-y border-[#2a2a2a] shrink-0">
             <span className="text-amber-500 font-bold text-xs">↓</span>
@@ -589,19 +646,14 @@ function HorizontalFrameCard({
             imageBase64={frame.endImageBase64}
             imagePath={frame.endImagePath}
             error={frame.error}
-            isGenerating={frame.isGenerating}
+            isGenerating={frame.isGeneratingEnd}
             label="END"
             frameNumber={frame.frame_number}
             aspectRatio={aspectRatio}
-            onLightbox={
-              frame.endImageBase64 || frame.endImagePath
-                ? () => onLightbox(
-                    frame.endImageBase64 ?? `/api/images/${frame.endImagePath}`,
-                    `End Frame ${frame.frame_number}`
-                  )
-                : undefined
-            }
+            onLightbox={onLightbox}
             onRegenerate={() => onRegenerateFrame(idx, "end")}
+            history={frame.endImageHistory}
+            onRestoreFromHistory={(path) => onUpdateFrame(idx, { endImagePath: path, endImageBase64: undefined })}
           />
         </div>
 

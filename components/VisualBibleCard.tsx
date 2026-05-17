@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, ChevronRight, Settings2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { Check, ChevronDown, ChevronRight, Pencil, Settings2, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import type { AppState } from "@/lib/vidboard-types";
 
@@ -17,31 +17,100 @@ export function VisualBibleCard({
   updateState,
 }: VisualBibleCardProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const startEdit = () => {
+    setDraft(visualBible);
+    setEditing(true);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+
+  const commitEdit = () => {
+    setEditing(false);
+    if (draft.trim() !== visualBible.trim()) {
+      updateState({ visualBible: draft.trim() });
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setDraft("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Escape") cancelEdit();
+    if (e.key === "Enter" && e.ctrlKey) commitEdit();
+  };
 
   return (
     <div className="glass rounded-xl p-4 flex flex-col gap-4">
-      <button
-        type="button"
-        onClick={() => setCollapsed((c) => !c)}
-        aria-expanded={!collapsed}
-        aria-controls="visual-bible-content"
-        className="flex items-center justify-between w-full text-left group"
-      >
-        <h2 className="text-[10px] text-amber-500 uppercase font-black tracking-[0.2em] flex items-center gap-2">
-          <Settings2 className="w-3 h-3" /> Visual Bible & Style Lock
-        </h2>
-        {collapsed ? (
-          <ChevronRight className="w-3 h-3 text-amber-500/60 group-hover:text-amber-500 transition-colors" />
-        ) : (
-          <ChevronDown className="w-3 h-3 text-amber-500/60 group-hover:text-amber-500 transition-colors" />
+      <div className="flex items-center justify-between w-full">
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-expanded={!collapsed}
+          aria-controls="visual-bible-content"
+          className="flex items-center gap-2 text-left group"
+        >
+          <h2 className="text-[10px] text-amber-500 uppercase font-black tracking-[0.2em] flex items-center gap-2">
+            <Settings2 className="w-3 h-3" /> Visual Bible & Style Lock
+          </h2>
+          {collapsed ? (
+            <ChevronRight className="w-3 h-3 text-amber-500/60 group-hover:text-amber-500 transition-colors" />
+          ) : (
+            <ChevronDown className="w-3 h-3 text-amber-500/60 group-hover:text-amber-500 transition-colors" />
+          )}
+        </button>
+
+        {!collapsed && !editing && (
+          <button
+            aria-label="Edit visual bible"
+            onClick={startEdit}
+            className="flex items-center gap-1 text-[10px] text-neutral-500 hover:text-amber-400 transition-colors px-2 py-1 rounded border border-transparent hover:border-neutral-700"
+          >
+            <Pencil className="w-3 h-3" /> Edit
+          </button>
         )}
-      </button>
+        {!collapsed && editing && (
+          <div className="flex items-center gap-1">
+            <button
+              aria-label="Save visual bible"
+              onClick={commitEdit}
+              className="flex items-center gap-1 text-[10px] text-green-400 hover:text-green-300 transition-colors px-2 py-1 rounded border border-green-500/30 hover:border-green-400/50"
+            >
+              <Check className="w-3 h-3" /> Save
+            </button>
+            <button
+              aria-label="Cancel editing"
+              onClick={cancelEdit}
+              className="flex items-center gap-1 text-[10px] text-neutral-500 hover:text-neutral-300 transition-colors px-2 py-1 rounded border border-transparent hover:border-neutral-700"
+            >
+              <X className="w-3 h-3" /> Cancel
+            </button>
+          </div>
+        )}
+      </div>
 
       {!collapsed && (
         <div id="visual-bible-content" className="flex flex-col gap-4">
-          <div className="text-sm text-gray-300 leading-relaxed bg-black/50 p-4 rounded border border-amber-500/10 prose prose-sm prose-invert prose-headings:text-amber-400 prose-headings:font-bold prose-headings:uppercase prose-headings:tracking-wide prose-headings:text-xs prose-strong:text-gray-200 prose-ul:my-1 prose-li:my-0 max-w-none">
-            <ReactMarkdown>{visualBible}</ReactMarkdown>
-          </div>
+          {editing ? (
+            <textarea
+              ref={textareaRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={16}
+              aria-label="Visual Bible editor"
+              className="w-full resize-y rounded border border-amber-500/40 bg-[#0d0d0d] px-4 py-3 text-sm text-gray-200 font-mono leading-relaxed outline-none focus:border-amber-500/70 min-h-[200px]"
+            />
+          ) : (
+            <div className="text-sm text-gray-300 leading-relaxed bg-black/50 p-4 rounded border border-amber-500/10 prose prose-sm prose-invert prose-headings:text-amber-400 prose-headings:font-bold prose-headings:uppercase prose-headings:tracking-wide prose-headings:text-xs prose-strong:text-gray-200 prose-ul:my-1 prose-li:my-0 max-w-none">
+              <ReactMarkdown>{visualBible}</ReactMarkdown>
+            </div>
+          )}
+
           <div className="flex items-center gap-4 mt-2">
             <label className="text-xs uppercase tracking-wider text-gray-400">
               Character Reference Image:
