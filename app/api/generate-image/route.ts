@@ -396,6 +396,9 @@ const downloadImage = async (image: ComfyImageOutput, projectId: string, kind: s
   const imageBase64 = buffer.toString("base64");
 
   // Persist to disk under data/projects/{projectId}/
+  if (!/^[A-Za-z0-9_-]+$/.test(projectId)) {
+    throw new Error("Invalid projectId.");
+  }
   const projectDir = path.join(DATA_DIR, "projects", projectId);
   await mkdir(projectDir, { recursive: true });
   const filename = `${kind}-${Date.now()}.png`;

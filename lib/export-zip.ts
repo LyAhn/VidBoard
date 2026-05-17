@@ -24,11 +24,20 @@ export const exportStoryboardZip = async ({
     }
   };
 
+  const mimeToExt = (mime: string) =>
+    mime.toLowerCase().includes("jpeg") || mime.toLowerCase().includes("jpg") ? "jpg" : "png";
+
   const resolveBlob = async (base64?: string, path?: string): Promise<Blob | null> => {
     if (base64) {
-      const clean = base64.replace(/^data:image\/(png|jpeg|jpg);base64,/, "");
-      const bytes = Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
-      return new Blob([bytes], { type: "image/png" });
+      try {
+        const match = base64.match(/^data:(image\/(?:png|jpe?g));base64,(.+)$/i);
+        const mime = match ? match[1].toLowerCase().replace("image/jpg", "image/jpeg") : "image/png";
+        const clean = match ? match[2] : base64;
+        const bytes = Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
+        return new Blob([bytes], { type: mime });
+      } catch {
+        return null;
+      }
     }
     if (path) return fetchBlob(path);
     return null;
@@ -42,8 +51,8 @@ export const exportStoryboardZip = async ({
         resolveBlob(frame.startImageBase64, frame.startImagePath),
         resolveBlob(frame.endImageBase64, frame.endImagePath),
       ]);
-      if (startBlob) zip.file(`Frame_${pad}_Start.png`, startBlob);
-      if (endBlob) zip.file(`Frame_${pad}_End.png`, endBlob);
+      if (startBlob) zip.file(`Frame_${pad}_Start.${mimeToExt(startBlob.type)}`, startBlob);
+      if (endBlob) zip.file(`Frame_${pad}_End.${mimeToExt(endBlob.type)}`, endBlob);
     })
   );
 

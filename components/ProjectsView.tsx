@@ -44,7 +44,11 @@ export function ProjectsView({
 
   const handleDelete = async (id: string) => {
     setShowDeleteConfirm(null);
-    await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      console.error("Failed to delete project", id);
+      return;
+    }
     setProjects((prev) => prev.filter((p) => p.id !== id));
   };
 

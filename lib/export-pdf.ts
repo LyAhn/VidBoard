@@ -15,10 +15,10 @@ const fetchImageAsDataUrl = async (path: string): Promise<string | null> => {
     const res = await fetch(`/api/images/${path}`);
     if (!res.ok) return null;
     const blob = await res.blob();
-    return new Promise((resolve, reject) => {
+    return await new Promise<string | null>((resolve) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
+      reader.onerror = () => resolve(null);
       reader.readAsDataURL(blob);
     });
   } catch {

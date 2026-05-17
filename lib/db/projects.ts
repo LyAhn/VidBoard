@@ -24,7 +24,7 @@ function toSummary(row: ProjectRow): ProjectSummary {
     const frames = state.frames ?? [];
     const withImage = frames.filter((f) => f.startImagePath || f.endImagePath);
     if (withImage.length > 0) {
-      const pick = withImage[Math.floor(Math.random() * withImage.length)];
+      const pick = withImage[withImage.length - 1];
       thumbnailImagePath = pick.startImagePath ?? pick.endImagePath ?? null;
     }
   } catch {
@@ -52,6 +52,14 @@ export function getProject(id: string): ProjectDetail | null {
   return { ...toSummary(row), stateJson: row.stateJson };
 }
 
+function assertValidStateJson(stateJson: string): void {
+  try {
+    JSON.parse(stateJson);
+  } catch {
+    throw new Error("Invalid stateJson: not valid JSON");
+  }
+}
+
 export function createProject(data: {
   id: string;
   name: string;
@@ -59,6 +67,7 @@ export function createProject(data: {
   trackTitle: string;
   stateJson: string;
 }): ProjectDetail {
+  assertValidStateJson(data.stateJson);
   const now = new Date();
   db.insert(projects).values({ ...data, createdAt: now, updatedAt: now }).run();
   return getProject(data.id)!;
@@ -68,6 +77,7 @@ export function updateProject(
   id: string,
   data: { name?: string; artistName?: string; trackTitle?: string; stateJson?: string }
 ): ProjectDetail | null {
+  if (data.stateJson !== undefined) assertValidStateJson(data.stateJson);
   db.update(projects)
     .set({ ...data, updatedAt: new Date() })
     .where(eq(projects.id, id))

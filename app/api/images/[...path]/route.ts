@@ -12,7 +12,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ pat
   // Prevent path traversal
   const relative = segments.join("/");
   const resolved = path.resolve(DATA_DIR, relative);
-  if (!resolved.startsWith(DATA_DIR)) {
+  const relativeToData = path.relative(DATA_DIR, resolved);
+  if (relativeToData.startsWith("..") || path.isAbsolute(relativeToData)) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 
