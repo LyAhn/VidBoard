@@ -1,13 +1,15 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { PlaySquare, Sparkles } from "lucide-react";
+import { v4 as uuidv4 } from "uuid";
 import {
   checkPromptStatus,
   freeComfyMemory,
   getWorkflowInfo,
   requestGeneratedImage,
 } from "@/lib/api/generate-image";
+import { createProject, loadProject, updateProject } from "@/lib/api/projects";
 import { requestStoryboardPlan } from "@/lib/api/plan";
 import { exportStoryboardPdf } from "@/lib/export-pdf";
 import { exportStoryboardZip } from "@/lib/export-zip";
@@ -17,10 +19,13 @@ import type { CardLayout } from "@/components/StoryboardGrid";
 import { ArtistContextCard } from "@/components/ArtistContextCard";
 import { CinematicLoader } from "@/components/PlanningLoader";
 import { planningSteps } from "@/components/PlanningProgress";
+import { ProjectsView } from "@/components/ProjectsView";
 import { StoryboardGrid } from "@/components/StoryboardGrid";
 import { StoryboardToolbar } from "@/components/StoryboardToolbar";
 import { VidBoardSidebar } from "@/components/VidBoardSidebar";
 import { VisualBibleCard } from "@/components/VisualBibleCard";
+
+type AppView = "projects" | "storyboard";
 
 const initialState: AppState = {
   artistName: "",
@@ -42,6 +47,11 @@ const initialState: AppState = {
 };
 
 export default function VidBoardApp() {
+  const [view, setView] = useState<AppView>("projects");
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState<string>("");
+  const [isDirty, setIsDirty] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [state, setState] = useState<AppState>(initialState);
   const [expandedDescriptions, setExpandedDescriptions] = useState<Record<number, boolean>>({});
   const [planningElapsed, setPlanningElapsed] = useState(0);
@@ -52,90 +62,105 @@ export default function VidBoardApp() {
 
   const updateState = (updates: Partial<AppState>) => {
     setState((prev) => ({ ...prev, ...updates }));
+    setIsDirty(true);
   };
 
-  useEffect(() => {
-    let cancelled = false;
+  // ── Serialise current state for DB (strip in-memory base64 — images are on disk) ──
+  const serialiseState = useCallback(
+    (currentState: AppState) =>
+      JSON.stringify({
+        ...currentState,
+        isPlanning: false,
+        isGeneratingImages: false,
+        error: null,
+        statusMessage: null,
+        frames: currentState.frames.map((f) => ({
+          ...f,
+          startImageBase64: undefined,
+          endImageBase64: undefined,
+          isGenerating: false,
+          error: undefined,
+        })),
+      }),
+    []
+  );
 
-    queueMicrotask(() => {
-      if (cancelled) return;
+  // ── Save current project to DB ────────────────────────────────────────────────────
+  const saveCurrentProject = useCallback(
+    async (currentState: AppState, currentProjectId: string | null, explicitName?: string): Promise<string> => {
+      const derived =
+        currentState.artistName && currentState.trackTitle
+          ? `${currentState.artistName} — ${currentState.trackTitle}`
+          : currentState.artistName || currentState.trackTitle || "Untitled Project";
+      const name = explicitName || derived;
 
-      const saved = window.localStorage.getItem("vidboard_state");
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          setState((prev) => ({
-            ...prev,
-            artistName: parsed.artistName || "",
-            trackTitle: parsed.trackTitle || "",
-            lyrics: parsed.lyrics || "",
-            theme: parsed.theme || "",
-            visualDirection: ["artist", "lyrics", "theme"].includes(parsed.visualDirection)
-              ? parsed.visualDirection
-              : "lyrics",
-            visualConcept: parsed.visualConcept || "",
-            numberOfFrames: parsed.numberOfFrames || 8,
-            aspectRatio: parsed.aspectRatio || "16:9",
-          }));
-        } catch (error) {
-          console.error("Failed to parse saved state", error);
+      const stateJson = serialiseState(currentState);
+      setSaveStatus("saving");
+
+      try {
+        if (currentProjectId) {
+          await updateProject(currentProjectId, {
+            name,
+            artistName: currentState.artistName,
+            trackTitle: currentState.trackTitle,
+            stateJson,
+          });
+          setIsDirty(false);
+          setSaveStatus("saved");
+          return currentProjectId;
+        } else {
+          const id = uuidv4();
+          await createProject({ id, name, artistName: currentState.artistName, trackTitle: currentState.trackTitle, stateJson });
+          setProjectId(id);
+          setIsDirty(false);
+          setSaveStatus("saved");
+          return id;
         }
+      } catch (err) {
+        setSaveStatus("idle");
+        throw err;
       }
+    },
+    [serialiseState]
+  );
 
-      const savedLayout = window.localStorage.getItem("vidboard_card_layout");
-      if (savedLayout === "horizontal" || savedLayout === "vertical") {
-        setCardLayout(savedLayout);
-      }
-
-      hasLoadedSavedState.current = true;
-    });
-
-    return () => {
-      cancelled = true;
-    };
+  // ── Load a project from DB ────────────────────────────────────────────────────────
+  const openProject = useCallback(async (id: string) => {
+    try {
+      const project = await loadProject(id);
+      const loaded = JSON.parse(project.stateJson) as Partial<AppState>;
+      setState({
+        ...initialState,
+        artistName: loaded.artistName ?? "",
+        trackTitle: loaded.trackTitle ?? "",
+        lyrics: loaded.lyrics ?? "",
+        theme: loaded.theme ?? "",
+        visualDirection: loaded.visualDirection ?? "lyrics",
+        visualConcept: loaded.visualConcept ?? "",
+        numberOfFrames: loaded.numberOfFrames ?? 8,
+        aspectRatio: loaded.aspectRatio ?? "16:9",
+        artistContext: loaded.artistContext ?? null,
+        visualBible: loaded.visualBible ?? null,
+        characterReferenceImage: loaded.characterReferenceImage ?? null,
+        frames: (loaded.frames ?? []).map((f) => ({ ...f, isGenerating: false, error: undefined })),
+      });
+      setProjectId(id);
+      setProjectName(project.name);
+      setExpandedDescriptions({});
+      setIsDirty(false);
+      setView("storyboard");
+    } catch (error) {
+      console.error("Failed to open project", error);
+    }
   }, []);
 
   useEffect(() => {
-    if (!hasLoadedSavedState.current) {
-      return;
+    const savedLayout = window.localStorage.getItem("vidboard_card_layout");
+    if (savedLayout === "horizontal" || savedLayout === "vertical") {
+      setCardLayout(savedLayout);
     }
-
-    const stateToSave = {
-      artistName: state.artistName,
-      trackTitle: state.trackTitle,
-      lyrics: state.lyrics,
-      theme: state.theme,
-      visualDirection: state.visualDirection,
-      visualConcept: state.visualConcept,
-      numberOfFrames: state.numberOfFrames,
-      aspectRatio: state.aspectRatio,
-      artistContext: state.artistContext,
-      visualBible: state.visualBible,
-      frames: state.frames.map((frame) => ({
-        ...frame,
-        startImageBase64: undefined,
-        endImageBase64: undefined,
-      })),
-    };
-
-    try {
-      window.localStorage.setItem("vidboard_state", JSON.stringify(stateToSave));
-    } catch (error) {
-      console.warn("Storage error", error);
-    }
-  }, [
-    state.artistName,
-    state.trackTitle,
-    state.lyrics,
-    state.theme,
-    state.visualDirection,
-    state.visualConcept,
-    state.numberOfFrames,
-    state.aspectRatio,
-    state.artistContext,
-    state.visualBible,
-    state.frames,
-  ]);
+    hasLoadedSavedState.current = true;
+  }, []);
 
   useEffect(() => {
     if (!hasLoadedSavedState.current) return;
@@ -145,6 +170,13 @@ export default function VidBoardApp() {
       console.warn("Storage error", error);
     }
   }, [cardLayout]);
+
+  // Auto-clear "saved" indicator after 2.5s
+  useEffect(() => {
+    if (saveStatus !== "saved") return;
+    const t = window.setTimeout(() => setSaveStatus("idle"), 2500);
+    return () => window.clearTimeout(t);
+  }, [saveStatus]);
 
   useEffect(() => {
     if (!state.isPlanning) return;
@@ -173,7 +205,17 @@ export default function VidBoardApp() {
         frameIdx === idx ? { ...frame, ...updates } : frame
       ),
     }));
+    setIsDirty(true);
   };
+
+  // Ensure a project ID exists before generating — creates the DB record if needed
+  const ensureProjectId = useCallback(
+    async (currentState: AppState): Promise<string> => {
+      if (projectId) return projectId;
+      return saveCurrentProject(currentState, null);
+    },
+    [projectId, saveCurrentProject]
+  );
 
   const generateFrameImages = async (
     frames: FrameData[],
@@ -187,6 +229,8 @@ export default function VidBoardApp() {
       statusMessage: "Checking image workflow...",
       error: null,
     });
+
+    const currentProjectId = await ensureProjectId(state);
 
     const workflowInfo = await getWorkflowInfo();
     if (referenceImageBase64 && !workflowInfo.start.capabilities.referenceImage) {
@@ -225,12 +269,14 @@ export default function VidBoardApp() {
         const startData = await requestGeneratedImage({
           prompt: buildStartFramePrompt(frame, visualBible),
           kind: "start",
+          projectId: currentProjectId,
           aspectRatio: state.aspectRatio,
           referenceImageBase64: frameRef,
           workflow: startWorkflow,
         });
         updateFrame(index, {
           startImageBase64: startData.imageBase64,
+          startImagePath: startData.imagePath,
           startPromptId: startData.promptId,
         });
 
@@ -238,12 +284,14 @@ export default function VidBoardApp() {
         const endData = await requestGeneratedImage({
           prompt: buildEndFramePrompt(frame, visualBible),
           kind: "end",
+          projectId: currentProjectId,
           aspectRatio: state.aspectRatio,
           referenceImageBase64: frameRef,
           workflow: endWorkflow,
         });
         updateFrame(index, {
           endImageBase64: endData.imageBase64,
+          endImagePath: endData.imagePath,
           endPromptId: endData.promptId,
           isGenerating: false,
         });
@@ -261,6 +309,12 @@ export default function VidBoardApp() {
     updateState({
       isGeneratingImages: false,
       statusMessage: null,
+    });
+
+    // Auto-save after generation completes
+    setState((prev) => {
+      saveCurrentProject(prev, currentProjectId).catch(console.error);
+      return prev;
     });
   };
 
@@ -304,14 +358,21 @@ export default function VidBoardApp() {
         next_lyric_line: frames[index + 1]?.lyric_line,
         isGenerating: false,
       }));
-      updateState({
+      const nextState: Partial<AppState> = {
         artistContext: planData.artistContext,
         visualBible: planData.visualBible,
         frames: plannedFrames,
         isPlanning: false,
         isGeneratingImages: false,
         statusMessage: null,
+      };
+      // updateState marks dirty, so call setState directly then save manually
+      setState((prev) => {
+        const merged = { ...prev, ...nextState };
+        saveCurrentProject(merged, projectId).catch(console.error);
+        return merged;
       });
+      setIsDirty(false);
     } catch (error) {
       updateState({
         error: error instanceof Error ? error.message : "Failed to plan storyboard.",
@@ -329,6 +390,7 @@ export default function VidBoardApp() {
     updateFrame(frameIdx, { isGenerating: true, error: undefined });
 
     try {
+      const currentProjectId = await ensureProjectId(state);
       const referenceImageBase64 = state.characterReferenceImage;
       const useReferenceWorkflow = frame.character_present && Boolean(referenceImageBase64);
 
@@ -348,12 +410,14 @@ export default function VidBoardApp() {
         const startData = await requestGeneratedImage({
           prompt: buildStartFramePrompt(frame, state.visualBible),
           kind: "start",
+          projectId: currentProjectId,
           aspectRatio: state.aspectRatio,
           referenceImageBase64: frameRef,
           workflow: useReferenceWorkflow ? undefined : "flux2-klein-txt2img",
         });
         updateFrame(frameIdx, {
           startImageBase64: startData.imageBase64,
+          startImagePath: startData.imagePath,
           startPromptId: startData.promptId,
           isGenerating: false,
         });
@@ -361,12 +425,14 @@ export default function VidBoardApp() {
         const endData = await requestGeneratedImage({
           prompt: buildEndFramePrompt(frame, state.visualBible),
           kind: "end",
+          projectId: currentProjectId,
           aspectRatio: state.aspectRatio,
           referenceImageBase64: frameRef,
           workflow: useReferenceWorkflow ? "flux2-klein-reference" : "flux2-klein-txt2img",
         });
         updateFrame(frameIdx, {
           endImageBase64: endData.imageBase64,
+          endImagePath: endData.imagePath,
           endPromptId: endData.promptId,
           isGenerating: false,
         });
@@ -448,6 +514,54 @@ export default function VidBoardApp() {
     alert("Copied all Flow prompts to clipboard!");
   };
 
+  const handleNewProject = () => {
+    setState(initialState);
+    setProjectId(null);
+    setProjectName("");
+    setExpandedDescriptions({});
+    setIsDirty(false);
+    setView("storyboard");
+  };
+
+  const handleRenameProject = async (newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    setProjectName(trimmed);
+    setIsDirty(true);
+    await saveCurrentProject(state, projectId, trimmed);
+  };
+
+  const handleGoToProjects = async () => {
+    const hasContent = state.artistName || state.trackTitle || state.frames.length > 0;
+    if (hasContent && (isDirty || !projectId)) {
+      await saveCurrentProject(state, projectId);
+    }
+    setView("projects");
+  };
+
+  const handleManualSave = async () => {
+    await saveCurrentProject(state, projectId);
+  };
+
+  if (view === "projects") {
+    return (
+      <div className="flex h-screen w-full overflow-hidden bg-[#111111] font-sans text-[#e5e5e5]">
+        <ProjectsView
+          isDirty={false}
+          onNewProject={handleNewProject}
+          onOpenProject={openProject}
+          onSaveCurrentAndOpen={async (id) => {
+            await saveCurrentProject(state, projectId);
+            await openProject(id);
+          }}
+          onDiscardAndOpen={async (id) => {
+            await openProject(id);
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-[#111111] font-sans text-[#e5e5e5]">
       <VidBoardSidebar
@@ -464,6 +578,16 @@ export default function VidBoardApp() {
           isGeneratingImages={state.isGeneratingImages}
           cardLayout={cardLayout}
           onCardLayoutChange={setCardLayout}
+          onGoToProjects={handleGoToProjects}
+          onManualSave={handleManualSave}
+          onRenameProject={handleRenameProject}
+          saveStatus={saveStatus}
+          projectName={
+            projectName ||
+            (state.artistName && state.trackTitle
+              ? `${state.artistName} — ${state.trackTitle}`
+              : state.artistName || state.trackTitle || "Untitled Project")
+          }
           onRetryImages={handleRetryImages}
           onExportPdf={() =>
             exportStoryboardPdf({

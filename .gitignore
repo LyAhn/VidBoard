@@ -37,3 +37,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# VidBoard local data
+vidboard.db
+vidboard.db-shm
+vidboard.db-wal
+/data/
+/drizzle/
