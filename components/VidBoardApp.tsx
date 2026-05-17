@@ -317,6 +317,52 @@ export default function VidBoardApp() {
     }
   };
 
+  const regenerateSingleFrame = async (frameIdx: number, side: "start" | "end") => {
+    const frame = state.frames[frameIdx];
+    if (!frame || !state.visualBible) return;
+
+    updateFrame(frameIdx, { isGenerating: true, error: undefined });
+
+    try {
+      const referenceImageBase64 = state.characterReferenceImage;
+      const useReferenceWorkflow = frame.character_present && Boolean(referenceImageBase64);
+      const frameRef = useReferenceWorkflow ? referenceImageBase64 : undefined;
+
+      if (side === "start") {
+        const startData = await requestGeneratedImage({
+          prompt: buildStartFramePrompt(frame, state.visualBible),
+          kind: "start",
+          aspectRatio: state.aspectRatio,
+          referenceImageBase64: frameRef,
+          workflow: useReferenceWorkflow ? undefined : "flux2-klein-txt2img",
+        });
+        updateFrame(frameIdx, {
+          startImageBase64: startData.imageBase64,
+          startPromptId: startData.promptId,
+          isGenerating: false,
+        });
+      } else {
+        const endData = await requestGeneratedImage({
+          prompt: buildEndFramePrompt(frame, state.visualBible),
+          kind: "end",
+          aspectRatio: state.aspectRatio,
+          referenceImageBase64: frameRef,
+          workflow: useReferenceWorkflow ? "flux2-klein-reference" : "flux2-klein-txt2img",
+        });
+        updateFrame(frameIdx, {
+          endImageBase64: endData.imageBase64,
+          endPromptId: endData.promptId,
+          isGenerating: false,
+        });
+      }
+    } catch (error) {
+      updateFrame(frameIdx, {
+        isGenerating: false,
+        error: error instanceof Error ? error.message : "Regeneration failed.",
+      });
+    }
+  };
+
   const handleGenerateImages = async () => {
     if (!state.visualBible || !state.frames.length) return;
     await generateFrameImages(state.frames, state.visualBible, state.characterReferenceImage);
@@ -489,6 +535,7 @@ export default function VidBoardApp() {
             expandedDescriptions={expandedDescriptions}
             onToggleDescription={toggleDescription}
             cardLayout={cardLayout}
+            onRegenerateFrame={regenerateSingleFrame}
           />
         </div>
 

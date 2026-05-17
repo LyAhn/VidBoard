@@ -11,6 +11,7 @@ import {
   ImageIcon,
   Loader2,
   Palette,
+  RefreshCw,
   Sun,
   User,
   X,
@@ -26,6 +27,7 @@ interface StoryboardGridProps {
   expandedDescriptions: Record<number, boolean>;
   onToggleDescription: (idx: number) => void;
   cardLayout: CardLayout;
+  onRegenerateFrame: (frameIdx: number, side: "start" | "end") => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────
@@ -94,6 +96,7 @@ function FrameImageState({
   lyricLine,
   aspectRatio,
   onLightbox,
+  onRegenerate,
 }: {
   imageBase64?: string;
   error?: string;
@@ -103,12 +106,13 @@ function FrameImageState({
   lyricLine?: string;
   aspectRatio: AspectRatio;
   onLightbox?: () => void;
+  onRegenerate?: () => void;
 }) {
   const clickable = !!imageBase64 && !!onLightbox;
 
   return (
     <div
-      className={`relative flex-1 flex items-center justify-center bg-gradient-to-br from-indigo-900/40 to-black ${canvasClass(aspectRatio)} ${clickable ? "cursor-zoom-in" : ""}`}
+      className={`group/img relative flex-1 flex items-center justify-center bg-gradient-to-br from-indigo-900/40 to-black ${canvasClass(aspectRatio)} ${clickable ? "cursor-zoom-in" : ""}`}
       onClick={clickable ? onLightbox : undefined}
     >
       {imageBase64 ? (
@@ -156,6 +160,16 @@ function FrameImageState({
         <div className="absolute bottom-2 left-2 right-2 pointer-events-none">
           <p className="text-[10px] italic text-amber-200 line-clamp-1">&quot;{lyricLine}&quot;</p>
         </div>
+      )}
+
+      {onRegenerate && !isGenerating && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRegenerate(); }}
+          title={`Regenerate ${label.toLowerCase()} frame`}
+          className="absolute top-2 right-2 opacity-0 group-hover/img:opacity-100 transition-opacity bg-black/70 hover:bg-black/90 rounded p-1 z-10"
+        >
+          <RefreshCw className="w-3 h-3 text-white" />
+        </button>
       )}
     </div>
   );
@@ -280,6 +294,7 @@ function VerticalFrameCard({
   expanded,
   onToggleDescription,
   onLightbox,
+  onRegenerateFrame,
 }: {
   frame: FrameData;
   idx: number;
@@ -287,6 +302,7 @@ function VerticalFrameCard({
   expanded: boolean;
   onToggleDescription: (idx: number) => void;
   onLightbox: (src: string, alt: string) => void;
+  onRegenerateFrame: (frameIdx: number, side: "start" | "end") => void;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -307,6 +323,7 @@ function VerticalFrameCard({
                 ? () => onLightbox(frame.startImageBase64!, `Start Frame ${frame.frame_number}`)
                 : undefined
             }
+            onRegenerate={() => onRegenerateFrame(idx, "start")}
           />
           <div className="h-5 flex items-center justify-center bg-[#171717] border-y border-[#2a2a2a] shrink-0">
             <span className="text-amber-500 font-bold text-xs">↓</span>
@@ -323,6 +340,7 @@ function VerticalFrameCard({
                 ? () => onLightbox(frame.endImageBase64!, `End Frame ${frame.frame_number}`)
                 : undefined
             }
+            onRegenerate={() => onRegenerateFrame(idx, "end")}
           />
         </div>
 
@@ -410,6 +428,7 @@ function HorizontalFrameCard({
   expanded,
   onToggleDescription,
   onLightbox,
+  onRegenerateFrame,
 }: {
   frame: FrameData;
   idx: number;
@@ -417,6 +436,7 @@ function HorizontalFrameCard({
   expanded: boolean;
   onToggleDescription: (idx: number) => void;
   onLightbox: (src: string, alt: string) => void;
+  onRegenerateFrame: (frameIdx: number, side: "start" | "end") => void;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -437,6 +457,7 @@ function HorizontalFrameCard({
                 ? () => onLightbox(frame.startImageBase64!, `Start Frame ${frame.frame_number}`)
                 : undefined
             }
+            onRegenerate={() => onRegenerateFrame(idx, "start")}
           />
           <div className="h-5 flex items-center justify-center bg-[#171717] border-y border-[#2a2a2a] shrink-0">
             <span className="text-amber-500 font-bold text-xs">↓</span>
@@ -453,6 +474,7 @@ function HorizontalFrameCard({
                 ? () => onLightbox(frame.endImageBase64!, `End Frame ${frame.frame_number}`)
                 : undefined
             }
+            onRegenerate={() => onRegenerateFrame(idx, "end")}
           />
         </div>
 
@@ -482,6 +504,7 @@ export function StoryboardGrid({
   expandedDescriptions,
   onToggleDescription,
   cardLayout,
+  onRegenerateFrame,
 }: StoryboardGridProps) {
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
 
@@ -509,6 +532,7 @@ export function StoryboardGrid({
               expanded={!!expandedDescriptions[idx]}
               onToggleDescription={onToggleDescription}
               onLightbox={openLightbox}
+              onRegenerateFrame={onRegenerateFrame}
             />
           ) : (
             <VerticalFrameCard
@@ -519,6 +543,7 @@ export function StoryboardGrid({
               expanded={!!expandedDescriptions[idx]}
               onToggleDescription={onToggleDescription}
               onLightbox={openLightbox}
+              onRegenerateFrame={onRegenerateFrame}
             />
           )
         )}
