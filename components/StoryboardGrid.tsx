@@ -194,6 +194,9 @@ function FrameImageState({
   onRestoreFromHistory?: (path: string) => void;
 }) {
   // Initialise to wherever imagePath sits in history, falling back to the last entry.
+  // The component is keyed on imagePath in parent cards, so it remounts when the
+  // active image changes (new regen or "Use"), keeping this initializer as the only
+  // source of truth and avoiding a setState-inside-effect anti-pattern.
   const [historyIdx, setHistoryIdx] = useState(() => {
     if (history && history.length > 0) {
       const idx = imagePath ? history.lastIndexOf(imagePath) : -1;
@@ -201,14 +204,6 @@ function FrameImageState({
     }
     return 0;
   });
-
-  // Sync when history grows (new regen added) or when the active image changes (Use clicked).
-  useEffect(() => {
-    if (history && history.length > 0) {
-      const idx = imagePath ? history.lastIndexOf(imagePath) : -1;
-      setHistoryIdx(idx >= 0 ? idx : history.length - 1);
-    }
-  }, [history?.length, imagePath]);
 
   const hasHistory = history && history.length > 1;
   const alt = `${label === "START" ? "Start" : "End"} Frame ${frameNumber}`;
@@ -486,6 +481,7 @@ function VerticalFrameCard({
         {/* Image pair — stacked full-width so thumbnails are as large as possible */}
         <div className="flex flex-col w-full">
           <FrameImageState
+            key={frame.startImagePath ?? `start-${frame.frame_number}`}
             imageBase64={frame.startImageBase64}
             imagePath={frame.startImagePath}
             error={frame.error}
@@ -503,6 +499,7 @@ function VerticalFrameCard({
             <span className="text-amber-500 font-bold text-xs">↓</span>
           </div>
           <FrameImageState
+            key={frame.endImagePath ?? `end-${frame.frame_number}`}
             imageBase64={frame.endImageBase64}
             imagePath={frame.endImagePath}
             error={frame.error}
@@ -629,6 +626,7 @@ function HorizontalFrameCard({
         {/* Left: stacked image pair */}
         <div className="w-2/5 flex-shrink-0 flex flex-col border-r border-[#2a2a2a]">
           <FrameImageState
+            key={frame.startImagePath ?? `start-${frame.frame_number}`}
             imageBase64={frame.startImageBase64}
             imagePath={frame.startImagePath}
             error={frame.error}
@@ -646,6 +644,7 @@ function HorizontalFrameCard({
             <span className="text-amber-500 font-bold text-xs">↓</span>
           </div>
           <FrameImageState
+            key={frame.endImagePath ?? `end-${frame.frame_number}`}
             imageBase64={frame.endImageBase64}
             imagePath={frame.endImagePath}
             error={frame.error}
