@@ -29,9 +29,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
+    const projectsRoot = path.resolve(process.cwd(), "data", "projects");
+    const projectDir = path.resolve(projectsRoot, id);
+    const rel = path.relative(projectsRoot, projectDir);
+    if (rel.startsWith("..") || path.isAbsolute(rel)) {
+      return NextResponse.json({ error: "Invalid project id." }, { status: 400 });
+    }
     deleteProject(id);
-    // Remove image files for this project
-    const projectDir = path.join(process.cwd(), "data", "projects", id);
     await rm(projectDir, { recursive: true, force: true });
     return NextResponse.json({ ok: true });
   } catch (error) {
