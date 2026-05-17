@@ -1,8 +1,12 @@
+import { LayoutGrid, LayoutList } from "lucide-react";
 import type { FrameData } from "@/lib/vidboard-types";
+import type { CardLayout } from "@/components/StoryboardGrid";
 
 interface StoryboardToolbarProps {
   frames: FrameData[];
   isGeneratingImages: boolean;
+  cardLayout: CardLayout;
+  onCardLayoutChange: (layout: CardLayout) => void;
   onRetryImages: () => void;
   onExportPdf: () => void;
   onDownloadZip: () => void;
@@ -12,6 +16,8 @@ interface StoryboardToolbarProps {
 export function StoryboardToolbar({
   frames,
   isGeneratingImages,
+  cardLayout,
+  onCardLayoutChange,
   onRetryImages,
   onExportPdf,
   onDownloadZip,
@@ -23,11 +29,38 @@ export function StoryboardToolbar({
     <header className="sticky top-0 z-20 h-16 border-b border-[#252525] flex items-center justify-between px-8 bg-[#171717]/70 backdrop-blur-md">
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2 text-xs font-medium text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
-          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
+          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
           Blueprint Ready
         </div>
         <span className="text-xs text-gray-500 hidden sm:block">{frames.length} Frames Generated</span>
+
+        {/* Layout toggle */}
+        <div className="flex items-center gap-1 bg-[#1c1c1c] border border-[#2a2a2a] rounded p-0.5">
+          <button
+            onClick={() => onCardLayoutChange("vertical")}
+            title="Grid view"
+            className={`p-1.5 rounded transition-colors ${
+              cardLayout === "vertical"
+                ? "bg-amber-500 text-black"
+                : "text-neutral-500 hover:text-neutral-300"
+            }`}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => onCardLayoutChange("horizontal")}
+            title="List view"
+            className={`p-1.5 rounded transition-colors ${
+              cardLayout === "horizontal"
+                ? "bg-amber-500 text-black"
+                : "text-neutral-500 hover:text-neutral-300"
+            }`}
+          >
+            <LayoutList className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
+
       <div className="flex items-center gap-3">
         {frames.some((frame) => frame.error) && !isGeneratingImages && (
           <button

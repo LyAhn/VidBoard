@@ -13,6 +13,7 @@ import { exportStoryboardPdf } from "@/lib/export-pdf";
 import { exportStoryboardZip } from "@/lib/export-zip";
 import { buildEndFramePrompt, buildStartFramePrompt } from "@/lib/storyboard-prompts";
 import type { AppState, FrameData } from "@/lib/vidboard-types";
+import type { CardLayout } from "@/components/StoryboardGrid";
 import { ArtistContextCard } from "@/components/ArtistContextCard";
 import { CinematicLoader } from "@/components/PlanningLoader";
 import { planningSteps } from "@/components/PlanningProgress";
@@ -45,6 +46,7 @@ export default function VidBoardApp() {
   const [expandedDescriptions, setExpandedDescriptions] = useState<Record<number, boolean>>({});
   const [planningElapsed, setPlanningElapsed] = useState(0);
   const [planningStepIndex, setPlanningStepIndex] = useState(0);
+  const [cardLayout, setCardLayout] = useState<CardLayout>("vertical");
   const mainAreaRef = useRef<HTMLDivElement>(null);
   const hasLoadedSavedState = useRef(false);
 
@@ -78,6 +80,11 @@ export default function VidBoardApp() {
         } catch (error) {
           console.error("Failed to parse saved state", error);
         }
+      }
+
+      const savedLayout = window.localStorage.getItem("vidboard_card_layout");
+      if (savedLayout === "horizontal" || savedLayout === "vertical") {
+        setCardLayout(savedLayout);
       }
 
       hasLoadedSavedState.current = true;
@@ -129,6 +136,10 @@ export default function VidBoardApp() {
     state.visualBible,
     state.frames,
   ]);
+
+  useEffect(() => {
+    window.localStorage.setItem("vidboard_card_layout", cardLayout);
+  }, [cardLayout]);
 
   useEffect(() => {
     if (!state.isPlanning) return;
@@ -389,6 +400,8 @@ export default function VidBoardApp() {
         <StoryboardToolbar
           frames={state.frames}
           isGeneratingImages={state.isGeneratingImages}
+          cardLayout={cardLayout}
+          onCardLayoutChange={setCardLayout}
           onRetryImages={handleRetryImages}
           onExportPdf={() =>
             exportStoryboardPdf({
@@ -475,6 +488,7 @@ export default function VidBoardApp() {
             aspectRatio={state.aspectRatio}
             expandedDescriptions={expandedDescriptions}
             onToggleDescription={toggleDescription}
+            cardLayout={cardLayout}
           />
         </div>
 
