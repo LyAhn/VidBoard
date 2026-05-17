@@ -86,7 +86,7 @@ function StageList({ stepIndex }: { stepIndex: number }) {
 //   FRAME_W + FRAME_GAP = 88px per slot (both copies identical)
 //   Total strip width   = FRAME_COUNT × 2 × 88px
 //   filmScroll keyframe = exactly FRAME_COUNT × 88px  →  no jump on repeat
-const FRAME_COUNT = 16;
+const FRAME_COUNT = 24;
 const FRAME_W = 80; // px
 const FRAME_GAP = 8; // px — marginRight so every slot contributes equally to width
 
