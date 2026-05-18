@@ -19,7 +19,8 @@
       "file": "flux2-klein-reference.workflow.json",
       "capabilities": {
         "referenceImage": true,
-        "initImage": false
+        "initImage": false,
+        "negativePrompt": false
       },
       "nodes": {
         "prompt": "6",
@@ -35,7 +36,8 @@
       "file": "flux2-klein-reference-img2img.workflow.json",
       "capabilities": {
         "referenceImage": true,
-        "initImage": true
+        "initImage": true,
+        "negativePrompt": false
       },
       "nodes": {
         "prompt": "6",

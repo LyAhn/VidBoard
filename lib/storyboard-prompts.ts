@@ -1,6 +1,6 @@
 import type { FrameData } from "@/lib/vidboard-types";
 
-const VISUAL_BIBLE_MAX_CHARS = 200;
+const VISUAL_BIBLE_MAX_CHARS = 600;
 
 const cleanPrompt = (value: string) =>
   value
@@ -8,9 +8,31 @@ const cleanPrompt = (value: string) =>
     .replace(/Visual Bible:/gi, "")
     .trim();
 
-const truncateVisualBible = (visualBible: string) => {
+// Attempt to pull the two highest-value anchors (colour grade + environment) from a
+// structured Visual Bible before falling back to a plain character slice. This ensures
+// the model always sees the scene-consistency anchors even when the full VB is long.
+const truncateVisualBible = (visualBible: string): string => {
   const cleaned = cleanPrompt(visualBible);
   if (cleaned.length <= VISUAL_BIBLE_MAX_CHARS) return cleaned;
+
+  const extract = (pattern: RegExp): string | undefined => {
+    const m = cleaned.match(pattern);
+    if (!m) return undefined;
+    // Take up to two sentences from the matched section.
+    return m[0].replace(/\*{1,2}/g, "").replace(/#+\s*/g, "").trim();
+  };
+
+  const colour = extract(/(?:Fixed\s+Colou?r\s+Grade[^:]*:)[^*#]{0,300}/i);
+  const env = extract(/(?:Fixed\s+Environment[^:]*:)[^*#]{0,300}/i);
+  const sections = [colour, env].filter(Boolean) as string[];
+
+  if (sections.length > 0) {
+    const extracted = sections.join(" ").slice(0, VISUAL_BIBLE_MAX_CHARS);
+    const lastSpace = extracted.lastIndexOf(" ");
+    return (lastSpace > 50 ? extracted.slice(0, lastSpace) : extracted).trim();
+  }
+
+  // Fallback: plain slice at word boundary.
   const truncated = cleaned.slice(0, VISUAL_BIBLE_MAX_CHARS);
   const lastSpace = truncated.lastIndexOf(" ");
   return (lastSpace > 100 ? truncated.slice(0, lastSpace) : truncated) + ".";
@@ -71,6 +93,13 @@ const buildSharedPrompt = (frame: FrameData, visualBible: string) => {
 const lyricMood = (lyric?: string) =>
   lyric ? `Emotional tone of this moment: ${cleanPrompt(lyric)}` : undefined;
 
+export const buildNegativePrompt = (frame: FrameData, userNegative: string): string => {
+  const parts: string[] = [];
+  if (userNegative.trim()) parts.push(userNegative.trim());
+  if (!frame.character_present) parts.push("no people, no human figures, no person");
+  return parts.join(", ");
+};
+
 export const buildStartFramePrompt = (frame: FrameData, visualBible: string) =>
   [
     buildSharedPrompt(frame, visualBible),
@@ -87,6 +116,7 @@ export const buildEndFramePrompt = (frame: FrameData, visualBible: string) =>
   [
     buildSharedPrompt(frame, visualBible),
     `End frame: the concluded state of this scene after the motion has played out. ${cleanPrompt(frame.flow_prompt)}.`,
+    frame.scene_end_state ? `Final composition: ${cleanPrompt(frame.scene_end_state)}.` : undefined,
     lyricMood(frame.next_lyric_line || frame.lyric_line),
     frame.character_present
       ? "If a character reference image is provided, match the reference identity and wardrobe exactly. Subject has reached the final pose of this motion — position, eyeline, and hand placement should reflect the end of the action."

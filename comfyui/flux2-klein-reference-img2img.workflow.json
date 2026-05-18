@@ -262,7 +262,7 @@
   "23": {
     "inputs": {
       "upscale_method": "lanczos",
-      "megapixels": 0.35,
+      "megapixels": 0.65,
       "resolution_steps": 1,
       "image": [
         "22",

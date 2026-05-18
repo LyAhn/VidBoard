@@ -13,9 +13,10 @@ import { createProject, loadProject, updateProject } from "@/lib/api/projects";
 import { requestStoryboardPlan } from "@/lib/api/plan";
 import { exportStoryboardPdf } from "@/lib/export-pdf";
 import { exportStoryboardZip } from "@/lib/export-zip";
-import { buildEndFramePrompt, buildStartFramePrompt } from "@/lib/storyboard-prompts";
+import { buildEndFramePrompt, buildNegativePrompt, buildStartFramePrompt } from "@/lib/storyboard-prompts";
 import type { AppState, FrameData } from "@/lib/vidboard-types";
 import type { CardLayout } from "@/components/StoryboardGrid";
+import { useServiceHealth } from "@/hooks/use-service-health";
 import { ArtistContextCard } from "@/components/ArtistContextCard";
 import { CinematicLoader } from "@/components/PlanningLoader";
 import { planningSteps } from "@/components/PlanningProgress";
@@ -34,6 +35,7 @@ const initialState: AppState = {
   theme: "",
   visualDirection: "lyrics",
   visualConcept: "",
+  negativePrompt: "",
   numberOfFrames: 8,
   aspectRatio: "16:9",
   artistContext: null,
@@ -58,8 +60,10 @@ export default function VidBoardApp() {
   const [planningElapsed, setPlanningElapsed] = useState(0);
   const [planningStepIndex, setPlanningStepIndex] = useState(0);
   const [cardLayout, setCardLayout] = useState<CardLayout>("vertical");
+  const [negativePromptCapable, setNegativePromptCapable] = useState(false);
   const mainAreaRef = useRef<HTMLDivElement>(null);
   const hasLoadedSavedState = useRef(false);
+  const health = useServiceHealth();
 
   const updateState = (updates: Partial<AppState>) => {
     setState((prev) => {
@@ -143,6 +147,7 @@ export default function VidBoardApp() {
         theme: loaded.theme ?? "",
         visualDirection: loaded.visualDirection ?? "lyrics",
         visualConcept: loaded.visualConcept ?? "",
+        negativePrompt: loaded.negativePrompt ?? "",
         numberOfFrames: loaded.numberOfFrames ?? 8,
         aspectRatio: loaded.aspectRatio ?? "16:9",
         artistContext: loaded.artistContext ?? null,
@@ -178,6 +183,17 @@ export default function VidBoardApp() {
       console.warn("Storage error", error);
     }
   }, [cardLayout]);
+
+  useEffect(() => {
+    if (health.comfyui !== "online") return;
+    getWorkflowInfo()
+      .then((info) => {
+        setNegativePromptCapable(
+          info.start.capabilities.negativePrompt || info.end.capabilities.negativePrompt
+        );
+      })
+      .catch(() => undefined);
+  }, [health.comfyui]);
 
   // Auto-clear "saved" indicator after 2.5s
   useEffect(() => {
@@ -278,6 +294,7 @@ export default function VidBoardApp() {
         updateState({ statusMessage: `${frameLabel}: queuing start image...` });
         const startData = await requestGeneratedImage({
           prompt: buildStartFramePrompt(frame, visualBible),
+          negativePrompt: buildNegativePrompt(frame, state.negativePrompt),
           kind: "start",
           projectId: currentProjectId,
           aspectRatio: state.aspectRatio,
@@ -288,6 +305,7 @@ export default function VidBoardApp() {
           startImageBase64: startData.imageBase64,
           startImagePath: startData.imagePath,
           startPromptId: startData.promptId,
+          startSeed: startData.seed,
           startImageHistory: startData.imagePath
             ? [...(frame.startImageHistory ?? []), startData.imagePath]
             : frame.startImageHistory,
@@ -298,11 +316,13 @@ export default function VidBoardApp() {
         updateState({ statusMessage: `${frameLabel}: queuing end image${elapsedLabel()}...` });
         const endData = await requestGeneratedImage({
           prompt: buildEndFramePrompt(frame, visualBible),
+          negativePrompt: buildNegativePrompt(frame, state.negativePrompt),
           kind: "end",
           projectId: currentProjectId,
           aspectRatio: state.aspectRatio,
           referenceImageBase64: frameRef,
           workflow: endWorkflow,
+          seed: startData.seed !== undefined ? startData.seed + 1 : undefined,
         });
         updateFrame(index, {
           endImageBase64: endData.imageBase64,
@@ -431,6 +451,7 @@ export default function VidBoardApp() {
       if (side === "start") {
         const startData = await requestGeneratedImage({
           prompt: buildStartFramePrompt(frame, state.visualBible),
+          negativePrompt: buildNegativePrompt(frame, state.negativePrompt),
           kind: "start",
           projectId: currentProjectId,
           aspectRatio: state.aspectRatio,
@@ -441,6 +462,7 @@ export default function VidBoardApp() {
           startImageBase64: startData.imageBase64,
           startImagePath: startData.imagePath,
           startPromptId: startData.promptId,
+          startSeed: startData.seed,
           startImageHistory: startData.imagePath
             ? [...(frame.startImageHistory ?? (frame.startImagePath ? [frame.startImagePath] : [])), startData.imagePath]
             : frame.startImageHistory,
@@ -449,11 +471,15 @@ export default function VidBoardApp() {
       } else {
         const endData = await requestGeneratedImage({
           prompt: buildEndFramePrompt(frame, state.visualBible),
+          negativePrompt: buildNegativePrompt(frame, state.negativePrompt),
           kind: "end",
           projectId: currentProjectId,
           aspectRatio: state.aspectRatio,
           referenceImageBase64: frameRef,
           workflow: useReferenceWorkflow ? "flux2-klein-reference" : "flux2-klein-txt2img",
+          seed: frame.startSeed !== undefined
+            ? frame.startSeed + 1 + (frame.endImageHistory?.length ?? 0)
+            : undefined,
         });
         updateFrame(frameIdx, {
           endImageBase64: endData.imageBase64,
@@ -602,6 +628,7 @@ export default function VidBoardApp() {
         state={state}
         planningElapsed={planningElapsed}
         planningStepIndex={planningStepIndex}
+        negativePromptCapable={negativePromptCapable}
         onGenerate={handleGenerate}
         updateState={updateState}
       />

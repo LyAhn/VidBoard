@@ -7,6 +7,7 @@ interface VidBoardSidebarProps {
   state: AppState;
   planningElapsed: number;
   planningStepIndex: number;
+  negativePromptCapable: boolean;
   onGenerate: () => void;
   updateState: (updates: Partial<AppState>) => void;
 }
@@ -31,6 +32,7 @@ export function VidBoardSidebar({
   state,
   planningElapsed,
   planningStepIndex,
+  negativePromptCapable,
   onGenerate,
   updateState,
 }: VidBoardSidebarProps) {
@@ -143,6 +145,20 @@ export function VidBoardSidebar({
             </div>
           )}
         </div>
+
+        {negativePromptCapable && (
+          <div className="space-y-1">
+            <label className="input-label">Negative Prompt</label>
+            <textarea
+              value={state.negativePrompt}
+              onChange={(e) => updateState({ negativePrompt: e.target.value })}
+              rows={2}
+              className="w-full bg-[#1e1e1e] border border-[#2a2a2a] rounded px-3 py-2 text-xs focus:outline-none focus:border-amber-500 transition-colors resize-none font-mono"
+              placeholder="e.g. blurry, text, watermark, duplicate"
+            />
+            <p className="text-[9px] text-gray-500 italic">Environment-only frames auto-exclude human figures.</p>
+          </div>
+        )}
 
         <div className="flex gap-4">
           <div className="flex-1 space-y-1">

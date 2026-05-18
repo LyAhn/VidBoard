@@ -11,6 +11,7 @@ export interface FramePlan {
   colour_palette: string;
   motion_hint: string;
   flow_prompt: string;
+  scene_end_state?: string;
   image_prompt: string;
   character_present: boolean;
 }
@@ -24,6 +25,7 @@ export interface FrameData extends FramePlan {
   endImageHistory?: string[];
   startPromptId?: string;
   endPromptId?: string;
+  startSeed?: number;
   next_lyric_line?: string;
   isGeneratingStart?: boolean;
   isGeneratingEnd?: boolean;
@@ -37,6 +39,7 @@ export interface AppState {
   theme: string;
   visualDirection: VisualDirection;
   visualConcept: string;
+  negativePrompt: string;
   numberOfFrames: number;
   aspectRatio: AspectRatio;
   artistContext: string | null;
@@ -71,9 +74,11 @@ export interface GenerateImageRequestPayload {
   aspectRatio: AspectRatio;
   kind?: "start" | "end";
   projectId?: string;
+  negativePrompt?: string;
   referenceImageBase64?: string | null;
   initImageBase64?: string | null;
   workflow?: string;
+  seed?: number;
 }
 
 export interface GenerateImageResponsePayload {
@@ -81,6 +86,7 @@ export interface GenerateImageResponsePayload {
   promptId: string;
   workflow: string;
   imagePath?: string;
+  seed?: number;
 }
 
 export interface ProjectSummaryPayload {
@@ -108,6 +114,7 @@ export interface WorkflowInfoResponsePayload {
     capabilities: {
       referenceImage: boolean;
       initImage: boolean;
+      negativePrompt: boolean;
     };
   };
   end: {
@@ -115,6 +122,7 @@ export interface WorkflowInfoResponsePayload {
     capabilities: {
       referenceImage: boolean;
       initImage: boolean;
+      negativePrompt: boolean;
     };
   };
 }

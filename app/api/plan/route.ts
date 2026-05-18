@@ -59,6 +59,7 @@ const storyboardSchema = {
           colour_palette: { type: "string" },
           motion_hint: { type: "string" },
           flow_prompt: { type: "string" },
+          scene_end_state: { type: "string" },
           image_prompt: { type: "string" },
           character_present: { type: "boolean" },
         },
@@ -72,6 +73,7 @@ const storyboardSchema = {
           "colour_palette",
           "motion_hint",
           "flow_prompt",
+          "scene_end_state",
           "image_prompt",
           "character_present",
         ],
@@ -325,9 +327,10 @@ For each frame, provide:
 6. 'lighting': Lighting style (e.g. hard side-light, practical neon, golden hour).
 7. 'colour_palette': Specific colours dominant in this frame.
 8. 'motion_hint': Implied camera/subject movement for a video generation system.
-9. 'flow_prompt': A short, motion-optimised description in the format: "[Subject] [action verb] [direction/manner], [camera movement if any]". Maximum 20 words. Must be concrete and physical — no placeholders, no markdown, no brackets.
-10. 'image_prompt': A complete, self-contained generative AI image prompt for a text-to-image model. Must describe character details, environment, lighting, and style consistent with the Visual Bible. Must NOT repeat the full Visual Bible verbatim — instead, describe only this frame's specific composition, subject action, foreground props, and camera placement. Must not request visible text, captions, subtitles, lyrics, logos, or written words.
-11. 'character_present': Boolean true if the frame features the main human subject (artist/character).
+9. 'flow_prompt': Describes the physical change FROM the start state TO the end state of this scene — what moves, in which direction, and where the camera repositions. Format: "[Subject] [verb phrase indicating change] [from/toward direction or destination], [resulting camera position or movement]". Maximum 20 words. Must specify a spatial delta, not just an action — make clear where things START and where they END UP. No placeholders, no markdown, no brackets.
+10. 'scene_end_state': A 40–60 word cinematographer's shot note describing the EXACT final composition of the end frame — subject position, body orientation, expression or gaze direction, key prop placement, camera angle and distance, and environment state. This is distinct from flow_prompt: it describes WHERE things end up, not how they got there.
+11. 'image_prompt': A complete, self-contained generative AI image prompt for a text-to-image model. Must describe character details, environment, lighting, and style consistent with the Visual Bible. Must NOT repeat the full Visual Bible verbatim — instead, describe only this frame's specific composition, subject action, foreground props, and camera placement. Must not request visible text, captions, subtitles, lyrics, logos, or written words.
+12. 'character_present': Boolean true if the frame features the main human subject (artist/character).
 
 Rules:
 - Each frame must be visually distinct: vary shot scale, blocking, pose, foreground action, prop focus, and camera movement.

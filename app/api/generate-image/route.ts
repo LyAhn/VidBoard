@@ -26,6 +26,7 @@ interface WorkflowDefinition {
   capabilities?: {
     referenceImage?: boolean;
     initImage?: boolean;
+    negativePrompt?: boolean;
   };
   nodes: WorkflowNodeMap;
 }
@@ -75,7 +76,8 @@ const isGenerateImageRequest = (value: unknown): value is GenerateImageRequestPa
       data.initImageBase64 === null ||
       typeof data.initImageBase64 === "string") &&
     (data.workflow === undefined || typeof data.workflow === "string") &&
-    (data.projectId === undefined || typeof data.projectId === "string")
+    (data.projectId === undefined || typeof data.projectId === "string") &&
+    (data.negativePrompt === undefined || typeof data.negativePrompt === "string")
   );
 };
 
@@ -141,6 +143,7 @@ const summarizeWorkflow = (workflowName: string, definition: WorkflowDefinition)
   capabilities: {
     referenceImage: Boolean(definition.capabilities?.referenceImage && definition.nodes.referenceImage),
     initImage: Boolean(definition.capabilities?.initImage && definition.nodes.initImage),
+    negativePrompt: Boolean(definition.capabilities?.negativePrompt && definition.nodes.negativePrompt),
   },
 });
 
@@ -170,20 +173,20 @@ const setInputIfPresent = (
 };
 
 const injectWorkflowInputs = (
-  workflowName: string,
+  definition: WorkflowDefinition,
   workflow: Record<string, { inputs?: Record<string, unknown> }>,
-  nodes: WorkflowNodeMap,
   prompt: string,
   aspectRatio: AspectRatio,
+  seed: number,
+  negativePrompt?: string,
   referenceFilename?: string,
   initFilename?: string
 ) => {
+  const { nodes } = definition;
   const size = ASPECT_SIZES[aspectRatio];
 
   requireWorkflowNode(workflow, nodes.prompt, "prompt").inputs!.text = prompt;
-  requireWorkflowNode(workflow, nodes.seed, "seed").inputs!.noise_seed = Math.floor(
-    Math.random() * Number.MAX_SAFE_INTEGER
-  );
+  requireWorkflowNode(workflow, nodes.seed, "seed").inputs!.noise_seed = seed;
 
   setInputIfPresent(workflow, nodes.scheduler, "width", size.width);
   setInputIfPresent(workflow, nodes.scheduler, "height", size.height);
@@ -191,12 +194,10 @@ const injectWorkflowInputs = (
   setInputIfPresent(workflow, nodes.latent, "height", size.height);
   setInputIfPresent(workflow, nodes.latent, "batch_size", 1);
   setInputIfPresent(workflow, nodes.saveImage, "filename_prefix", "VidBoard/frame");
-  if (nodes.negativePrompt && workflow[nodes.negativePrompt]) {
-    const isFlux = /flux/i.test(workflowName);
-    if (!isFlux) {
-      requireWorkflowNode(workflow, nodes.negativePrompt, "negative prompt").inputs!.text =
-        process.env.COMFYUI_NEGATIVE_PROMPT ?? "";
-    }
+
+  if (definition.capabilities?.negativePrompt && nodes.negativePrompt && workflow[nodes.negativePrompt]) {
+    requireWorkflowNode(workflow, nodes.negativePrompt, "negative prompt").inputs!.text =
+      negativePrompt ?? "";
   }
 
   if (referenceFilename && nodes.referenceImage) {
@@ -430,12 +431,14 @@ export async function POST(req: NextRequest) {
     const workflow = await loadWorkflow(definition);
     const referenceFilename = await uploadReferenceImage(body.referenceImageBase64);
     const initFilename = await uploadReferenceImage(body.initImageBase64);
+    const seed = typeof body.seed === "number" ? body.seed : Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
     injectWorkflowInputs(
-      workflowName,
+      definition,
       workflow,
-      definition.nodes,
       body.prompt,
       body.aspectRatio,
+      seed,
+      body.negativePrompt,
       referenceFilename,
       initFilename
     );
@@ -446,7 +449,7 @@ export async function POST(req: NextRequest) {
     const kind = body.kind ?? "frame";
     const { imageBase64, imagePath } = await downloadImage(outputImage, projectId, kind);
 
-    return NextResponse.json({ imageBase64, promptId, workflow: workflowName, imagePath });
+    return NextResponse.json({ imageBase64, promptId, workflow: workflowName, imagePath, seed });
   } catch (error) {
     console.error("ComfyUI generation failed", error);
     return NextResponse.json({ error: classifyComfyError(error) }, { status: 500 });
