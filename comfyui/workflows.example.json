@@ -50,6 +50,23 @@
         "referenceImage": "124",
         "initImage": "116"
       }
+    },
+    "flux2-klein-edit": {
+      "file": "flux2-klein-edit.workflow.json",
+      "capabilities": {
+        "referenceImage": false,
+        "initImage": true,
+        "negativePrompt": false
+      },
+      "nodes": {
+        "prompt": "4",
+        "negativePrompt": "5",
+        "seed": "12",
+        "scheduler": "15",
+        "latent": "17",
+        "saveImage": "19",
+        "initImage": "20"
+      }
     }
   }
 }
