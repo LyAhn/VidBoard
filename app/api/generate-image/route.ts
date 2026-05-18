@@ -68,7 +68,7 @@ const isGenerateImageRequest = (value: unknown): value is GenerateImageRequestPa
     typeof data.prompt === "string" &&
     data.prompt.trim().length > 0 &&
     ["16:9", "9:16", "1:1"].includes(String(data.aspectRatio)) &&
-    (data.kind === undefined || ["start", "end"].includes(String(data.kind))) &&
+    (data.kind === undefined || ["start", "end", "edit"].includes(String(data.kind))) &&
     (data.referenceImageBase64 === undefined ||
       data.referenceImageBase64 === null ||
       typeof data.referenceImageBase64 === "string") &&
@@ -121,12 +121,13 @@ const loadWorkflow = async (definition: WorkflowDefinition) => {
   }
 };
 
-const resolveWorkflowDefinition = async (requestedWorkflow?: string, kind?: "start" | "end") => {
+const resolveWorkflowDefinition = async (requestedWorkflow?: string, kind?: "start" | "end" | "edit") => {
   const config = await loadWorkflowConfig();
   const workflowName =
     requestedWorkflow ||
     (kind === "start" ? process.env.COMFYUI_START_WORKFLOW : undefined) ||
     (kind === "end" ? process.env.COMFYUI_END_WORKFLOW : undefined) ||
+    (kind === "edit" ? process.env.COMFYUI_EDIT_WORKFLOW : undefined) ||
     process.env.COMFYUI_WORKFLOW ||
     config.defaultWorkflow;
   const definition = config.workflows[workflowName];
@@ -505,9 +506,16 @@ export async function GET(req: NextRequest) {
     try {
       const startWorkflow = await resolveWorkflowDefinition(undefined, "start");
       const endWorkflow = await resolveWorkflowDefinition(undefined, "end");
+      const editWorkflowName = process.env.COMFYUI_EDIT_WORKFLOW;
+      const editWorkflow = editWorkflowName
+        ? await resolveWorkflowDefinition(editWorkflowName, "edit")
+        : null;
       return NextResponse.json({
         start: summarizeWorkflow(startWorkflow.workflowName, startWorkflow.definition),
         end: summarizeWorkflow(endWorkflow.workflowName, endWorkflow.definition),
+        ...(editWorkflow
+          ? { edit: summarizeWorkflow(editWorkflow.workflowName, editWorkflow.definition) }
+          : {}),
       });
     } catch (error) {
       return NextResponse.json(

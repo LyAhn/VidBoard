@@ -72,7 +72,7 @@ export interface PlanResponsePayload {
 export interface GenerateImageRequestPayload {
   prompt: string;
   aspectRatio: AspectRatio;
-  kind?: "start" | "end";
+  kind?: "start" | "end" | "edit";
   projectId?: string;
   negativePrompt?: string;
   referenceImageBase64?: string | null;
@@ -108,21 +108,14 @@ export type PromptStatusResponsePayload =
   | { status: "pending" }
   | { status: "not_found" };
 
+interface WorkflowCapabilities {
+  referenceImage: boolean;
+  initImage: boolean;
+  negativePrompt: boolean;
+}
+
 export interface WorkflowInfoResponsePayload {
-  start: {
-    workflow: string;
-    capabilities: {
-      referenceImage: boolean;
-      initImage: boolean;
-      negativePrompt: boolean;
-    };
-  };
-  end: {
-    workflow: string;
-    capabilities: {
-      referenceImage: boolean;
-      initImage: boolean;
-      negativePrompt: boolean;
-    };
-  };
+  start: { workflow: string; capabilities: WorkflowCapabilities };
+  end: { workflow: string; capabilities: WorkflowCapabilities };
+  edit?: { workflow: string; capabilities: WorkflowCapabilities };
 }

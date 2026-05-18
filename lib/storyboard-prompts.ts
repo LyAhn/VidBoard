@@ -100,6 +100,21 @@ export const buildNegativePrompt = (frame: FrameData, userNegative: string): str
   return parts.join(", ");
 };
 
+export const buildEditFramePrompt = (instruction: string, frame: FrameData, visualBible: string) => {
+  const vbSummary = truncateVisualBible(visualBible);
+  const camera = cameraPackage(frame.camera_angle);
+  const lighting = cleanPrompt(frame.lighting).toLowerCase();
+  const colour = cleanPrompt(frame.colour_palette).toLowerCase();
+  return [
+    `${cleanPrompt(instruction)}.`,
+    `Production design: ${vbSummary}`,
+    `${camera}.`,
+    `Lighting: ${lighting}.`,
+    `Colour grade: ${colour}.`,
+    "Photorealistic live-action music video frame.",
+  ].join(" ");
+};
+
 export const buildStartFramePrompt = (frame: FrameData, visualBible: string) =>
   [
     buildSharedPrompt(frame, visualBible),

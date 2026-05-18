@@ -12,6 +12,7 @@ import {
   ImageIcon,
   Loader2,
   Palette,
+  Pencil,
   RefreshCw,
   Sun,
   User,
@@ -30,6 +31,8 @@ interface StoryboardGridProps {
   cardLayout: CardLayout;
   onRegenerateFrame: (frameIdx: number, side: "start" | "end") => void;
   onUpdateFrame: (frameIdx: number, updates: Partial<FrameData>) => void;
+  editCapable?: boolean;
+  onEditFrame?: (frameIdx: number, side: "start" | "end", instruction: string) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────
@@ -177,6 +180,7 @@ function FrameImageState({
   aspectRatio,
   onLightbox,
   onRegenerate,
+  onEdit,
   history,
   onRestoreFromHistory,
 }: {
@@ -190,6 +194,7 @@ function FrameImageState({
   aspectRatio: AspectRatio;
   onLightbox?: (src: string, alt: string) => void;
   onRegenerate?: () => void;
+  onEdit?: (instruction: string) => void;
   history?: string[];
   onRestoreFromHistory?: (path: string) => void;
 }) {
@@ -204,6 +209,18 @@ function FrameImageState({
     }
     return 0;
   });
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editInstruction, setEditInstruction] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  const submitEdit = () => {
+    const instruction = editInstruction.trim();
+    if (!instruction || !onEdit) return;
+    onEdit(instruction);
+    setEditInstruction("");
+    setEditOpen(false);
+  };
 
   const hasHistory = history && history.length > 1;
   const alt = `${label === "START" ? "Start" : "End"} Frame ${frameNumber}`;
@@ -328,6 +345,55 @@ function FrameImageState({
         >
           <RefreshCw className="w-3 h-3 text-white" />
         </button>
+      )}
+
+      {onEdit && src && !isGenerating && !editOpen && (
+        <button
+          aria-label={`Edit ${label.toLowerCase()} frame`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditOpen(true);
+            setTimeout(() => editInputRef.current?.focus(), 0);
+          }}
+          className="absolute top-2 right-8 opacity-0 group-hover/img:opacity-100 group-focus-within/img:opacity-100 focus-visible:opacity-100 transition-opacity bg-black/70 hover:bg-black/90 rounded p-1 z-10"
+        >
+          <Pencil className="w-3 h-3 text-white" />
+        </button>
+      )}
+
+      {editOpen && (
+        <div
+          className="absolute inset-0 z-20 flex flex-col items-center justify-end pb-3 px-2 bg-black/70"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="w-full flex gap-1">
+            <input
+              ref={editInputRef}
+              type="text"
+              value={editInstruction}
+              onChange={(e) => setEditInstruction(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitEdit();
+                if (e.key === "Escape") { setEditOpen(false); setEditInstruction(""); }
+              }}
+              placeholder="Describe the edit…"
+              className="flex-1 min-w-0 bg-[#111] border border-amber-500/50 rounded px-2 py-1 text-[10px] text-white placeholder-neutral-500 outline-none focus:border-amber-400"
+            />
+            <button
+              onClick={submitEdit}
+              disabled={!editInstruction.trim()}
+              className="shrink-0 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black rounded px-2 py-1 text-[10px] font-bold transition-colors"
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => { setEditOpen(false); setEditInstruction(""); }}
+              className="shrink-0 bg-neutral-700 hover:bg-neutral-600 text-white rounded p-1 transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -464,6 +530,7 @@ function VerticalFrameCard({
   onLightbox,
   onRegenerateFrame,
   onUpdateFrame,
+  onEditFrame,
 }: {
   frame: FrameData;
   idx: number;
@@ -473,6 +540,7 @@ function VerticalFrameCard({
   onLightbox: (src: string, alt: string) => void;
   onRegenerateFrame: (frameIdx: number, side: "start" | "end") => void;
   onUpdateFrame: (frameIdx: number, updates: Partial<FrameData>) => void;
+  onEditFrame?: (frameIdx: number, side: "start" | "end", instruction: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -492,6 +560,7 @@ function VerticalFrameCard({
             aspectRatio={aspectRatio}
             onLightbox={onLightbox}
             onRegenerate={() => onRegenerateFrame(idx, "start")}
+            onEdit={onEditFrame ? (instruction) => onEditFrame(idx, "start", instruction) : undefined}
             history={frame.startImageHistory}
             onRestoreFromHistory={(path) => onUpdateFrame(idx, { startImagePath: path, startImageBase64: undefined })}
           />
@@ -509,6 +578,7 @@ function VerticalFrameCard({
             aspectRatio={aspectRatio}
             onLightbox={onLightbox}
             onRegenerate={() => onRegenerateFrame(idx, "end")}
+            onEdit={onEditFrame ? (instruction) => onEditFrame(idx, "end", instruction) : undefined}
             history={frame.endImageHistory}
             onRestoreFromHistory={(path) => onUpdateFrame(idx, { endImagePath: path, endImageBase64: undefined })}
           />
@@ -609,6 +679,7 @@ function HorizontalFrameCard({
   onLightbox,
   onRegenerateFrame,
   onUpdateFrame,
+  onEditFrame,
 }: {
   frame: FrameData;
   idx: number;
@@ -618,6 +689,7 @@ function HorizontalFrameCard({
   onLightbox: (src: string, alt: string) => void;
   onRegenerateFrame: (frameIdx: number, side: "start" | "end") => void;
   onUpdateFrame: (frameIdx: number, updates: Partial<FrameData>) => void;
+  onEditFrame?: (frameIdx: number, side: "start" | "end", instruction: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -637,6 +709,7 @@ function HorizontalFrameCard({
             aspectRatio={aspectRatio}
             onLightbox={onLightbox}
             onRegenerate={() => onRegenerateFrame(idx, "start")}
+            onEdit={onEditFrame ? (instruction) => onEditFrame(idx, "start", instruction) : undefined}
             history={frame.startImageHistory}
             onRestoreFromHistory={(path) => onUpdateFrame(idx, { startImagePath: path, startImageBase64: undefined })}
           />
@@ -654,6 +727,7 @@ function HorizontalFrameCard({
             aspectRatio={aspectRatio}
             onLightbox={onLightbox}
             onRegenerate={() => onRegenerateFrame(idx, "end")}
+            onEdit={onEditFrame ? (instruction) => onEditFrame(idx, "end", instruction) : undefined}
             history={frame.endImageHistory}
             onRestoreFromHistory={(path) => onUpdateFrame(idx, { endImagePath: path, endImageBase64: undefined })}
           />
@@ -688,6 +762,8 @@ export function StoryboardGrid({
   cardLayout,
   onRegenerateFrame,
   onUpdateFrame,
+  editCapable,
+  onEditFrame,
 }: StoryboardGridProps) {
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
 
@@ -717,6 +793,7 @@ export function StoryboardGrid({
               onLightbox={openLightbox}
               onRegenerateFrame={onRegenerateFrame}
               onUpdateFrame={onUpdateFrame}
+              onEditFrame={editCapable ? onEditFrame : undefined}
             />
           ) : (
             <VerticalFrameCard
@@ -729,6 +806,7 @@ export function StoryboardGrid({
               onLightbox={openLightbox}
               onRegenerateFrame={onRegenerateFrame}
               onUpdateFrame={onUpdateFrame}
+              onEditFrame={editCapable ? onEditFrame : undefined}
             />
           )
         )}

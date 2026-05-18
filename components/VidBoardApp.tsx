@@ -13,7 +13,7 @@ import { createProject, loadProject, updateProject } from "@/lib/api/projects";
 import { requestStoryboardPlan } from "@/lib/api/plan";
 import { exportStoryboardPdf } from "@/lib/export-pdf";
 import { exportStoryboardZip } from "@/lib/export-zip";
-import { buildEndFramePrompt, buildNegativePrompt, buildStartFramePrompt } from "@/lib/storyboard-prompts";
+import { buildEditFramePrompt, buildEndFramePrompt, buildNegativePrompt, buildStartFramePrompt } from "@/lib/storyboard-prompts";
 import type { AppState, FrameData } from "@/lib/vidboard-types";
 import type { CardLayout } from "@/components/StoryboardGrid";
 import { useServiceHealth } from "@/hooks/use-service-health";
@@ -61,6 +61,7 @@ export default function VidBoardApp() {
   const [planningStepIndex, setPlanningStepIndex] = useState(0);
   const [cardLayout, setCardLayout] = useState<CardLayout>("vertical");
   const [negativePromptCapable, setNegativePromptCapable] = useState(false);
+  const [editCapable, setEditCapable] = useState(false);
   const mainAreaRef = useRef<HTMLDivElement>(null);
   const hasLoadedSavedState = useRef(false);
   const health = useServiceHealth();
@@ -191,6 +192,7 @@ export default function VidBoardApp() {
         setNegativePromptCapable(
           info.start.capabilities.negativePrompt || info.end.capabilities.negativePrompt
         );
+        setEditCapable(Boolean(info.edit));
       })
       .catch(() => undefined);
   }, [health.comfyui]);
@@ -503,6 +505,85 @@ export default function VidBoardApp() {
     }
   };
 
+  const editFrame = async (frameIdx: number, side: "start" | "end", instruction: string) => {
+    const frame = state.frames[frameIdx];
+    if (!frame) return;
+
+    const currentImage = side === "start"
+      ? (frame.startImageBase64 ?? (frame.startImagePath ? `/api/images/${frame.startImagePath}` : undefined))
+      : (frame.endImageBase64 ?? (frame.endImagePath ? `/api/images/${frame.endImagePath}` : undefined));
+    if (!currentImage) return;
+
+    updateFrame(frameIdx, {
+      isGeneratingStart: side === "start",
+      isGeneratingEnd: side === "end",
+      error: undefined,
+    });
+
+    try {
+      const currentProjectId = await ensureProjectId(state);
+
+      // Fetch as base64 if we only have a path
+      let initImageBase64 = frame[side === "start" ? "startImageBase64" : "endImageBase64"];
+      if (!initImageBase64) {
+        const imagePath = frame[side === "start" ? "startImagePath" : "endImagePath"];
+        if (imagePath) {
+          const res = await fetch(`/api/images/${imagePath}`);
+          const blob = await res.blob();
+          initImageBase64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve((reader.result as string).split(",").at(-1) ?? "");
+            reader.readAsDataURL(blob);
+          });
+        }
+      }
+      if (!initImageBase64) throw new Error("No source image to edit.");
+
+      const editData = await requestGeneratedImage({
+        prompt: state.visualBible
+          ? buildEditFramePrompt(instruction, frame, state.visualBible)
+          : instruction,
+        kind: "edit",
+        workflow: "flux2-klein-edit",
+        projectId: currentProjectId,
+        aspectRatio: state.aspectRatio,
+        initImageBase64,
+      });
+
+      if (side === "start") {
+        updateFrame(frameIdx, {
+          startImageBase64: editData.imageBase64,
+          startImagePath: editData.imagePath,
+          startPromptId: editData.promptId,
+          startSeed: editData.seed,
+          startImageHistory: editData.imagePath
+            ? [...(frame.startImageHistory ?? (frame.startImagePath ? [frame.startImagePath] : [])), editData.imagePath]
+            : frame.startImageHistory,
+          isGeneratingStart: false,
+        });
+      } else {
+        updateFrame(frameIdx, {
+          endImageBase64: editData.imageBase64,
+          endImagePath: editData.imagePath,
+          endPromptId: editData.promptId,
+          endImageHistory: editData.imagePath
+            ? [...(frame.endImageHistory ?? (frame.endImagePath ? [frame.endImagePath] : [])), editData.imagePath]
+            : frame.endImageHistory,
+          isGeneratingEnd: false,
+        });
+      }
+
+      freeComfyMemory().catch(() => undefined);
+      saveCurrentProject(latestStateRef.current, currentProjectId).catch(console.error);
+    } catch (error) {
+      updateFrame(frameIdx, {
+        isGeneratingStart: false,
+        isGeneratingEnd: false,
+        error: error instanceof Error ? error.message : "Edit failed.",
+      });
+    }
+  };
+
   const handleGenerateImages = async () => {
     if (!state.visualBible || !state.frames.length) return;
     await generateFrameImages(state.frames, state.visualBible, state.characterReferenceImage);
@@ -738,6 +819,8 @@ export default function VidBoardApp() {
             cardLayout={cardLayout}
             onRegenerateFrame={regenerateSingleFrame}
             onUpdateFrame={updateFrame}
+            editCapable={editCapable}
+            onEditFrame={editFrame}
           />
         </div>
 
