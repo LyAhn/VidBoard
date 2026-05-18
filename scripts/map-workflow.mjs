@@ -6,19 +6,29 @@
  * needed in workflows.json.
  *
  * Usage:
- *   node scripts/map-workflow.mjs <workflow-file> [workflow-name]
+ *   node scripts/map-workflow.mjs <workflow-file> [workflow-name] [--init] [--ref]
  *
- * Example:
+ * Flags:
+ *   --init   Treat the single LoadImage node as an init/img2img image rather than
+ *            a character reference image. Use this for edit/inpaint workflows where
+ *            the LoadImage is the canvas being edited.
+ *   --ref    (default) Treat the single LoadImage node as a character reference image.
+ *
+ * Examples:
  *   node scripts/map-workflow.mjs comfyui/my-workflow.json my-workflow
+ *   node scripts/map-workflow.mjs comfyui/flux2-klein-edit.workflow.json flux2-klein-edit --init
  */
 
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 
-const [, , filePath, workflowName] = process.argv;
+const args = process.argv.slice(2);
+const filePath = args.find((a) => !a.startsWith("--"));
+const workflowName = args.filter((a) => !a.startsWith("--"))[1] ?? null;
+const forceInit = args.includes("--init");
 
 if (!filePath) {
-  console.error("Usage: node scripts/map-workflow.mjs <workflow-file> [workflow-name]");
+  console.error("Usage: node scripts/map-workflow.mjs <workflow-file> [workflow-name] [--init]");
   process.exit(1);
 }
 
@@ -71,6 +81,26 @@ const effectiveScheduler = schedulerNodes.length
 const saveNodes = byType(["SaveImage", "SaveAnimatedWEBP", "VHS_VideoCombine"]);
 const loadNodes = byType(["LoadImage"]);
 
+// ── LoadImage classification ───────────────────────────────────────────────
+// Two LoadImage nodes: first = referenceImage, second = initImage (convention).
+// One LoadImage node: defaults to referenceImage; pass --init to override.
+let refNode  = null;
+let initNode = null;
+
+if (loadNodes.length >= 2) {
+  refNode  = loadNodes[0]?.id ?? null;
+  initNode = loadNodes[1]?.id ?? null;
+} else if (loadNodes.length === 1) {
+  if (forceInit) {
+    initNode = loadNodes[0].id;
+  } else {
+    refNode = loadNodes[0].id;
+  }
+}
+
+const hasRef  = Boolean(refNode);
+const hasInit = Boolean(initNode);
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 const fmt = (candidates) =>
   candidates.length === 0
@@ -96,22 +126,20 @@ console.log(`Scheduler:       ${fmt(effectiveScheduler)}`);
 console.log(`Latent:          ${fmt(effectiveLatent)}`);
 console.log(`SaveImage:       ${fmt(saveNodes)}`);
 console.log(`LoadImage:       ${fmt(loadNodes)}`);
+if (loadNodes.length === 1) {
+  console.log(`  → classified as ${hasInit ? "initImage (--init flag)" : "referenceImage (default; use --init to override)"}`);
+}
 
 // ── Build suggested entry ──────────────────────────────────────────────────
 const name = workflowName ?? basename(filePath).replace(/\.workflow\.json$|\.json$/, "");
 const file = basename(filePath);
 
-const positiveClip = clipNodes[0]?.id ?? "?";
-const negativeClip = clipNodes[1]?.id ?? null;
-const seedNode     = pick(samplerNodes) ?? samplerNodes[0]?.id ?? "?";
+const positiveClip  = clipNodes[0]?.id ?? "?";
+const negativeClip  = clipNodes[1]?.id ?? null;
+const seedNode      = pick(samplerNodes) ?? samplerNodes[0]?.id ?? "?";
 const schedulerNode = pick(effectiveScheduler) ?? effectiveScheduler[0]?.id ?? null;
-const latentNode   = pick(effectiveLatent) ?? effectiveLatent[0]?.id ?? null;
-const saveNode     = pick(saveNodes) ?? saveNodes[0]?.id ?? "?";
-const refNode      = loadNodes[0]?.id ?? null;
-const initNode     = loadNodes[1]?.id ?? null;
-
-const hasRef  = Boolean(refNode);
-const hasInit = Boolean(initNode);
+const latentNode    = pick(effectiveLatent) ?? effectiveLatent[0]?.id ?? null;
+const saveNode      = pick(saveNodes) ?? saveNodes[0]?.id ?? "?";
 
 const nodeMap = {
   prompt: positiveClip,
@@ -140,6 +168,9 @@ if (clipNodes.length > 2) {
 }
 if (loadNodes.length > 2) {
   console.log("⚠️  More than two LoadImage nodes found — verify referenceImage vs initImage assignment.");
+}
+if (loadNodes.length === 1 && !forceInit) {
+  console.log("ℹ️  Single LoadImage treated as referenceImage. If this is an edit/img2img workflow, re-run with --init.");
 }
 if (clipNodes.length === 0 || samplerNodes.length === 0) {
   console.log("⚠️  Some key nodes were not detected. The workflow may use custom node types.");
