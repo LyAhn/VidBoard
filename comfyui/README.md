@@ -11,6 +11,7 @@ comfyui/
 ├── flux2-klein-txt2img.workflow.json           ← text-to-image (no reference image)
 ├── flux2-klein-reference.workflow.json         ← text prompt + character reference image
 ├── flux2-klein-reference-img2img.workflow.json ← reference + init-image (img2img)
+├── flux2-klein-edit.workflow.json              ← edit an existing frame with a text instruction
 └── flux2-klein.workflow.example.json           ← original smoke-test example
 ```
 
@@ -35,6 +36,7 @@ VidBoard uses two workflows per storyboard run, controlled by env vars:
 |---|---|---|
 | `COMFYUI_START_WORKFLOW` | `flux2-klein-reference` | Start frame — text prompt + optional character ref |
 | `COMFYUI_END_WORKFLOW` | `flux2-klein-reference` | End frame — same, or img2img variant |
+| `COMFYUI_EDIT_WORKFLOW` | *(unset — feature hidden)* | Edit frame — init image + instruction; enables pencil button |
 | `COMFYUI_WORKFLOW` | `defaultWorkflow` in `workflows.json` | Fallback if neither start/end is set |
 
 The defaults work out of the box. For continuity-aware end frames (where the start image seeds the end), switch the end workflow:
@@ -64,7 +66,8 @@ The script introspects node `class_type` values and prints candidate node IDs fo
       "file": "my-workflow.json",       // path relative to comfyui/
       "capabilities": {
         "referenceImage": false,        // true if workflow has a LoadImage for character ref
-        "initImage": false              // true if workflow has a LoadImage for init/img2img
+        "initImage": false,             // true if workflow has a LoadImage for init/img2img
+        "negativePrompt": false         // true if workflow uses CFG-based negative guidance (e.g. SDXL)
       },
       "nodes": {
         "prompt":         "<node-id>",  // CLIPTextEncode (positive)
@@ -81,14 +84,17 @@ The script introspects node `class_type` values and prints candidate node IDs fo
 }
 ```
 
-> **Note on negative prompts:** FLUX models use flow matching and do not support CFG-based negative guidance. VidBoard skips `negativePrompt` injection automatically for any workflow whose name matches `/flux/i`. For non-FLUX workflows, the negative prompt text can be set via `COMFYUI_NEGATIVE_PROMPT` in `.env.local` — a proper UI field is planned as part of broader non-FLUX workflow support.
+> **Note on negative prompts:** FLUX models use flow matching and do not support CFG-based negative guidance. Set `"negativePrompt": false` in a workflow's `capabilities` to hide the UI field and skip injection. Set it to `true` for CFG-based workflows (e.g. SDXL/Juggernaut) to enable the sidebar negative prompt field and inject the text into the mapped `negativePrompt` node.
 
 ## Environment variables
 
 ```env
 COMFYUI_BASE_URL=http://127.0.0.1:8188   # default; change if ComfyUI runs on another port
 COMFYUI_WORKFLOW_DIR=./comfyui            # directory containing workflow files
-COMFYUI_NEGATIVE_PROMPT=                  # negative prompt text for non-FLUX workflows
+COMFYUI_START_WORKFLOW=                   # workflow name for start frames (overrides defaultWorkflow)
+COMFYUI_END_WORKFLOW=                     # workflow name for end frames (overrides defaultWorkflow)
+COMFYUI_EDIT_WORKFLOW=                    # workflow name for frame edits; unset = Edit Frame button hidden
+COMFYUI_WORKFLOW=                         # fallback workflow if start/end not set
 ```
 
 > Comfy Desktop sometimes runs on a different port — check its startup log for the actual URL.

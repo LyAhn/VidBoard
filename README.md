@@ -34,9 +34,9 @@ This means VidBoard handles the creative planning and visual consistency work, w
 ### 2. Ollama
 
 - Install: https://ollama.com/download
-- Pull a planning model *(tested with Gemma4)*:
+- Pull a planning model *(tested with Qwen3)*:
   ```bash
-  ollama pull gemma4:e4b
+  ollama pull qwen3:8b
   ```
 - Create a free account at https://ollama.com and generate an API key — required for Ollama's web search feature
 
@@ -90,13 +90,14 @@ Open http://localhost:3000.
 
 ## Workflows
 
-Three ComfyUI workflow files are included in `comfyui/`, all targeting **FLUX.2 Klein 4B**:
+Four ComfyUI workflow files are included in `comfyui/`, all targeting **FLUX.2 Klein 4B**:
 
 | Workflow | Description |
 |---|---|
 | `flux2-klein-txt2img` | Text prompt only |
 | `flux2-klein-reference` | Text prompt + character reference image |
 | `flux2-klein-reference-img2img` | Text prompt + character ref + init image (img2img) |
+| `flux2-klein-edit` | Edit an existing frame with a text instruction |
 
 By default VidBoard uses `flux2-klein-reference` for both the Start and End frames. For storyboard continuity (where the Start frame seeds the End frame), set in `.env.local`:
 
@@ -104,6 +105,14 @@ By default VidBoard uses `flux2-klein-reference` for both the Start and End fram
 COMFYUI_START_WORKFLOW=flux2-klein-reference
 COMFYUI_END_WORKFLOW=flux2-klein-reference-img2img
 ```
+
+To enable the **Edit Frame** button (pencil icon on hover over any generated image), set:
+
+```env
+COMFYUI_EDIT_WORKFLOW=flux2-klein-edit
+```
+
+When enabled, clicking the pencil icon opens an inline input. Type an instruction (e.g. "add fog in the background") and the current frame is sent to the edit workflow as the init image. The Visual Bible's colour grade and environment anchors are automatically prepended to your instruction so edits stay on-style.
 
 ### Using a different model
 
@@ -129,6 +138,6 @@ See [`comfyui/README.md`](comfyui/README.md) for full workflow documentation, th
 
 ## Architecture
 
-- **Frontend:** Next.js 15 + React 19 + Tailwind CSS
+- **Frontend:** Next.js + React 19 + Tailwind CSS
 - **Planning LLM:** Ollama (qwen3:8b) with web search grounding
 - **Image generation:** ComfyUI + FLUX.2 Klein 4B FP8
