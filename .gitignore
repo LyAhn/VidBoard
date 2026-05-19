@@ -44,3 +44,11 @@ next-env.d.ts
 /*.db-wal
 /data/
 /drizzle/
+
+# ComfyUI workflows — only the bundled FLUX workflows are tracked.
+# Add your own *.workflow.json files for other models without them being committed.
+/comfyui/*.workflow.json
+!/comfyui/flux2-klein-txt2img.workflow.json
+!/comfyui/flux2-klein-reference.workflow.json
+!/comfyui/flux2-klein-reference-img2img.workflow.json
+!/comfyui/flux2-klein-edit.workflow.json

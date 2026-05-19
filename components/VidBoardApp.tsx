@@ -589,6 +589,24 @@ export default function VidBoardApp() {
     await generateFrameImages(state.frames, state.visualBible, state.characterReferenceImage);
   };
 
+  const handleRegenerateAll = async () => {
+    if (!state.visualBible || !state.frames.length) return;
+    const clearedFrames = state.frames.map((f) => ({
+      ...f,
+      startImagePath: undefined,
+      endImagePath: undefined,
+      startImageBase64: undefined,
+      endImageBase64: undefined,
+      startPromptId: undefined,
+      endPromptId: undefined,
+      isGeneratingStart: false,
+      isGeneratingEnd: false,
+      error: undefined,
+    }));
+    updateState({ frames: clearedFrames, error: null });
+    await generateFrameImages(clearedFrames, state.visualBible, state.characterReferenceImage);
+  };
+
   const handleRetryImages = async () => {
     if (!state.visualBible || !state.frames.length) return;
 
@@ -731,6 +749,7 @@ export default function VidBoardApp() {
               : state.artistName || state.trackTitle || "Untitled Project")
           }
           onRetryImages={handleRetryImages}
+          onRegenerateAll={handleRegenerateAll}
           onExportPdf={() =>
             exportStoryboardPdf({
               artistName: state.artistName,

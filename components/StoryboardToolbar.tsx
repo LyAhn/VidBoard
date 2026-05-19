@@ -14,6 +14,7 @@ interface StoryboardToolbarProps {
   saveStatus: "idle" | "saving" | "saved";
   projectName: string;
   onRetryImages: () => void;
+  onRegenerateAll: () => void;
   onExportPdf: () => void;
   onDownloadZip: () => void;
   onCopyFlowPrompts: () => void;
@@ -30,6 +31,7 @@ export function StoryboardToolbar({
   saveStatus,
   projectName,
   onRetryImages,
+  onRegenerateAll,
   onExportPdf,
   onDownloadZip,
   onCopyFlowPrompts,
@@ -166,6 +168,14 @@ export function StoryboardToolbar({
               className="text-[10px] font-bold bg-amber-500/10 text-amber-500 border border-amber-500/30 hover:bg-amber-500/20 px-4 py-2 rounded uppercase tracking-tighter transition-colors"
             >
               Retry Failed
+            </button>
+          )}
+          {!isGeneratingImages && (
+            <button
+              onClick={onRegenerateAll}
+              className="text-[10px] font-bold border border-[#333] hover:border-red-500 hover:text-red-400 px-4 py-2 rounded uppercase tracking-tighter transition-colors"
+            >
+              Restart Generation
             </button>
           )}
           <button

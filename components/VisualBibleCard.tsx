@@ -131,7 +131,21 @@ export function VisualBibleCard({
               className="text-xs text-gray-300 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-bold file:bg-amber-500/20 file:text-amber-500 hover:file:bg-amber-500/30 transition-colors"
             />
             {characterReferenceImage && (
-              <span className="text-xs text-green-400 font-medium">Uploaded ✓</span>
+              <div className="flex items-center gap-2">
+                <img
+                  src={characterReferenceImage}
+                  alt="Character reference"
+                  className="w-8 h-8 rounded object-cover border border-green-500/40"
+                />
+                <span className="text-xs text-green-400 font-medium">Uploaded ✓</span>
+                <button
+                  onClick={() => updateState({ characterReferenceImage: null })}
+                  aria-label="Remove reference image"
+                  className="text-xs text-neutral-500 hover:text-red-400 transition-colors px-1.5 py-0.5 rounded border border-neutral-700 hover:border-red-500/50"
+                >
+                  Remove
+                </button>
+              </div>
             )}
           </div>
         </div>

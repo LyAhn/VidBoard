@@ -93,10 +93,22 @@ const buildSharedPrompt = (frame: FrameData, visualBible: string) => {
 const lyricMood = (lyric?: string) =>
   lyric ? `Emotional tone of this moment: ${cleanPrompt(lyric)}` : undefined;
 
+// Base negative for any workflow that supports negative prompts. Targets the most
+// common failure modes: blown-out colour grade, anatomy errors, modern/stock look.
+const BASE_NEGATIVE = [
+  "daylight, bright sunlight, outdoor lighting, overexposed, washed out, blown highlights",
+  "modern interior, contemporary setting, clean minimalist space",
+  "stock photo, commercial photography, professional headshot",
+  "cartoon, illustration, painting, anime, cgi, render, 3d",
+  "extra limbs, deformed hands, mutated fingers, bad anatomy, disfigured, ugly",
+  "watermark, signature, text, logo, border, frame",
+  "low quality, blurry, jpeg artifacts, noise, grainy, pixelated",
+].join(", ");
+
 export const buildNegativePrompt = (frame: FrameData, userNegative: string): string => {
-  const parts: string[] = [];
+  const parts: string[] = [BASE_NEGATIVE];
   if (userNegative.trim()) parts.push(userNegative.trim());
-  if (!frame.character_present) parts.push("no people, no human figures, no person");
+  if (!frame.character_present) parts.push("people, human figures, person, face, body");
   return parts.join(", ");
 };
 

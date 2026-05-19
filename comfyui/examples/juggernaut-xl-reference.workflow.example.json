@@ -1,0 +1,135 @@
+{
+  "1": {
+    "inputs": {
+      "ckpt_name": "juggernautXL_ragnarokBy.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": { "title": "Load Checkpoint" }
+  },
+  "2": {
+    "inputs": {
+      "text": "",
+      "clip": ["1", 1]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "CLIP Text Encode (Positive)" }
+  },
+  "3": {
+    "inputs": {
+      "text": "",
+      "clip": ["1", 1]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": { "title": "CLIP Text Encode (Negative)" }
+  },
+  "4": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": { "title": "Empty Latent Image" }
+  },
+  "5": {
+    "inputs": {
+      "noise_seed": 0
+    },
+    "class_type": "RandomNoise",
+    "_meta": { "title": "RandomNoise" }
+  },
+  "6": {
+    "inputs": {
+      "model": ["1", 0],
+      "preset": "PLUS FACE (portraits)"
+    },
+    "class_type": "IPAdapterUnifiedLoader",
+    "_meta": { "title": "IPAdapter Unified Loader" }
+  },
+  "7": {
+    "inputs": {
+      "image": "reference.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": { "title": "Load Reference Image" }
+  },
+  "8": {
+    "inputs": {
+      "image": ["7", 0],
+      "interpolation": "LANCZOS",
+      "crop_position": "center",
+      "sharpening": 0.0
+    },
+    "class_type": "PrepImageForClipVision",
+    "_meta": { "title": "Prep Image For CLIP Vision" }
+  },
+  "9": {
+    "inputs": {
+      "model": ["6", 0],
+      "ipadapter": ["6", 1],
+      "image": ["8", 0],
+      "weight": 0.85,
+      "start_at": 0.0,
+      "end_at": 1.0,
+      "weight_type": "linear",
+      "combine_embeds": "concat",
+      "embeds_scaling": "K+V"
+    },
+    "class_type": "IPAdapterAdvanced",
+    "_meta": { "title": "IPAdapter Advanced" }
+  },
+  "10": {
+    "inputs": {
+      "model": ["9", 0],
+      "scheduler": "karras",
+      "steps": 30,
+      "denoise": 1.0
+    },
+    "class_type": "BasicScheduler",
+    "_meta": { "title": "BasicScheduler" }
+  },
+  "11": {
+    "inputs": {
+      "model": ["9", 0],
+      "positive": ["2", 0],
+      "negative": ["3", 0],
+      "cfg": 6.5
+    },
+    "class_type": "CFGGuider",
+    "_meta": { "title": "CFGGuider" }
+  },
+  "12": {
+    "inputs": {
+      "sampler_name": "dpmpp_2m"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": { "title": "KSamplerSelect" }
+  },
+  "13": {
+    "inputs": {
+      "noise": ["5", 0],
+      "guider": ["11", 0],
+      "sampler": ["12", 0],
+      "sigmas": ["10", 0],
+      "latent_image": ["4", 0]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": { "title": "SamplerCustomAdvanced" }
+  },
+  "14": {
+    "inputs": {
+      "samples": ["13", 0],
+      "vae": ["1", 2]
+    },
+    "class_type": "VAEDecode",
+    "_meta": { "title": "VAE Decode" }
+  },
+  "15": {
+    "inputs": {
+      "filename_prefix": "VidBoard/frame",
+      "images": ["14", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": { "title": "Save Image" }
+  }
+}
