@@ -60,6 +60,7 @@ const storyboardSchema = {
           motion_hint: { type: "string" },
           flow_prompt: { type: "string" },
           scene_end_state: { type: "string" },
+          scene_story_beat: { type: "string" },
           image_prompt: { type: "string" },
           character_present: { type: "boolean" },
         },
@@ -74,6 +75,7 @@ const storyboardSchema = {
           "motion_hint",
           "flow_prompt",
           "scene_end_state",
+          "scene_story_beat",
           "image_prompt",
           "character_present",
         ],
@@ -327,10 +329,11 @@ For each frame, provide:
 6. 'lighting': Lighting style (e.g. hard side-light, practical neon, golden hour).
 7. 'colour_palette': Specific colours dominant in this frame.
 8. 'motion_hint': Implied camera/subject movement for a video generation system.
-9. 'flow_prompt': Describes the physical change FROM the start state TO the end state of this scene — what moves, in which direction, and where the camera repositions. Format: "[Subject] [verb phrase indicating change] [from/toward direction or destination], [resulting camera position or movement]". Maximum 20 words. Must specify a spatial delta, not just an action — make clear where things START and where they END UP. No placeholders, no markdown, no brackets.
-10. 'scene_end_state': A 40–60 word cinematographer's shot note describing the EXACT final composition of the end frame — subject position, body orientation, expression or gaze direction, key prop placement, camera angle and distance, and environment state. This is distinct from flow_prompt: it describes WHERE things end up, not how they got there.
-11. 'image_prompt': A complete, self-contained generative AI image prompt for a text-to-image model. Must describe character details, environment, lighting, and style consistent with the Visual Bible. Must NOT repeat the full Visual Bible verbatim — instead, describe only this frame's specific composition, subject action, foreground props, and camera placement. Must not request visible text, captions, subtitles, lyrics, logos, or written words.
-12. 'character_present': Boolean true if the frame features the main human subject (artist/character).
+9. 'flow_prompt': The transition brief for Google Flow (Veo 3.1 Frames-to-Video). Three clauses describing the visible action that bridges start frame to end frame. Format: "[shot size + camera movement]. [subject + concrete visible action from start position to end position]. [environment + lighting + style]." Use only concrete visible language — describe what is SEEN, not editorial intent. Preferred Veo camera terms: dolly in/out, crane up/down, push in, pull back, track left/right, pan, tilt, rack focus. BANNED: vague editorial words like emphasising, highlighting, suggesting, conveying — replace with visible facts (e.g. "head bowed, shoulders slumped" not "emphasising dejection"). Maximum 40 words. No placeholders, no markdown, no brackets.
+10. 'scene_end_state': A 40–60 word cinematographer's shot note describing the EXACT final composition as a static tableau — subject's final position, body orientation, expression or gaze, key prop placement, camera angle and distance, environment state, lighting condition. Write as frozen frame: no motion verbs, no temporal language. This is WHERE things end up, not how they got there.
+11. 'scene_story_beat': One sentence describing the emotional or narrative beat this clip represents in the music video's story arc — e.g. "The singer's resignation reaches its lowest point" or "The instrumental groove locks in and the atmosphere shifts from tension to release." High-level scene intent for editorial context, not a visual description.
+12. 'image_prompt': A complete, self-contained generative AI image prompt for a text-to-image model. Must describe character details, environment, lighting, and style consistent with the Visual Bible. Must NOT repeat the full Visual Bible verbatim — instead, describe only this frame's specific composition, subject action, foreground props, and camera placement. Must not request visible text, captions, subtitles, lyrics, logos, or written words.
+13. 'character_present': Boolean true if the frame features the main human subject (artist/character).
 
 Rules:
 - Each frame must be visually distinct: vary shot scale, blocking, pose, foreground action, prop focus, and camera movement.

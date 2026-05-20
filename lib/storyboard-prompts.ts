@@ -139,15 +139,32 @@ export const buildStartFramePrompt = (frame: FrameData, visualBible: string) =>
     .filter(Boolean)
     .join(" ");
 
-export const buildEndFramePrompt = (frame: FrameData, visualBible: string) =>
-  [
-    buildSharedPrompt(frame, visualBible),
-    `End frame: the concluded state of this scene after the motion has played out. ${cleanPrompt(frame.flow_prompt)}.`,
-    frame.scene_end_state ? `Final composition: ${cleanPrompt(frame.scene_end_state)}.` : undefined,
+export const buildEndFramePrompt = (frame: FrameData, visualBible: string) => {
+  const vbSummary = truncateVisualBible(visualBible);
+  const camera = cameraPackage(frame.camera_angle);
+  const lighting = cleanPrompt(frame.lighting).toLowerCase();
+  const colour = cleanPrompt(frame.colour_palette).toLowerCase();
+
+  // End frame is a static final composition. scene_end_state is the primary payload —
+  // it describes the landed tableau with no motion language. We deliberately exclude
+  // flow_prompt here: motion verbs destabilise still-image generation and belong only
+  // in the Google Flow transition brief, not in the frame image prompt.
+  const endComposition = frame.scene_end_state
+    ? cleanPrompt(frame.scene_end_state)
+    : cleanPrompt(stripVisualBible(frame.image_prompt, visualBible)) || cleanPrompt(frame.image_prompt);
+
+  return [
+    `${endComposition}.`,
+    `Production design: ${vbSummary}`,
+    `${camera}.`,
+    `Lighting: ${lighting}.`,
+    `Colour grade: ${colour}.`,
+    "Photorealistic live-action music video frame. Real lens behaviour, subtle film grain, natural shadows, symmetrical faces with correct anatomy, consistent costume and instruments across the sequence.",
     lyricMood(frame.next_lyric_line || frame.lyric_line),
     frame.character_present
-      ? "If a character reference image is provided, match the reference identity and wardrobe exactly. Subject has reached the final pose of this motion — position, eyeline, and hand placement should reflect the end of the action."
-      : "No human subject. Pure environment, atmosphere, or object focus at the conclusion of the described motion.",
+      ? "If a character reference image is provided, match the reference identity and wardrobe exactly. Subject is in the final resting pose of this scene."
+      : "No human subject. Pure environment, atmosphere, or object focus.",
   ]
     .filter(Boolean)
     .join(" ");
+};

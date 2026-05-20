@@ -12,6 +12,7 @@ export interface FramePlan {
   motion_hint: string;
   flow_prompt: string;
   scene_end_state?: string;
+  scene_story_beat?: string;
   image_prompt: string;
   character_present: boolean;
 }
