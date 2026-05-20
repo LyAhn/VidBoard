@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import type { FrameData } from "@/lib/vidboard-types";
 import type { CardLayout } from "@/components/StoryboardGrid";
 
+
 interface StoryboardToolbarProps {
   frames: FrameData[];
   isGeneratingImages: boolean;
@@ -17,7 +18,7 @@ interface StoryboardToolbarProps {
   onRegenerateAll: () => void;
   onExportPdf: () => void;
   onDownloadZip: () => void;
-  onCopyFlowPrompts: () => void;
+  onCopyFlowPrompts: () => Promise<void>;
 }
 
 export function StoryboardToolbar({
@@ -38,6 +39,8 @@ export function StoryboardToolbar({
 }: StoryboardToolbarProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [confirmRestart, setConfirmRestart] = useState(false);
+  const [flowCopied, setFlowCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const cancelledRef = useRef(false);
 
@@ -171,12 +174,30 @@ export function StoryboardToolbar({
             </button>
           )}
           {!isGeneratingImages && (
-            <button
-              onClick={onRegenerateAll}
-              className="text-[10px] font-bold border border-[#333] hover:border-red-500 hover:text-red-400 px-4 py-2 rounded uppercase tracking-tighter transition-colors"
-            >
-              Restart Generation
-            </button>
+            confirmRestart ? (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-neutral-400">Restart?</span>
+                <button
+                  onClick={() => { setConfirmRestart(false); onRegenerateAll(); }}
+                  className="text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 px-3 py-2 rounded uppercase tracking-tighter transition-colors"
+                >
+                  Yes
+                </button>
+                <button
+                  onClick={() => setConfirmRestart(false)}
+                  className="text-[10px] font-bold border border-[#333] hover:border-neutral-500 px-3 py-2 rounded uppercase tracking-tighter transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmRestart(true)}
+                className="text-[10px] font-bold border border-[#333] hover:border-red-500 hover:text-red-400 px-4 py-2 rounded uppercase tracking-tighter transition-colors"
+              >
+                Restart Generation
+              </button>
+            )
           )}
           <button
             onClick={onExportPdf}
@@ -191,10 +212,10 @@ export function StoryboardToolbar({
             ZIP Frames
           </button>
           <button
-            onClick={onCopyFlowPrompts}
+            onClick={async () => { await onCopyFlowPrompts(); setFlowCopied(true); setTimeout(() => setFlowCopied(false), 1500); }}
             className="text-[10px] font-bold bg-[#eee] hover:bg-white text-black px-4 py-2 rounded uppercase tracking-tighter transition-colors"
           >
-            Copy Flow Prompts
+            {flowCopied ? "Copied ✓" : "Copy Flow Prompts"}
           </button>
         </div>
       )}

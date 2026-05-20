@@ -666,10 +666,15 @@ export default function VidBoardApp() {
     await generateFrameImages(recoveredFrames, state.visualBible, state.characterReferenceImage);
   };
 
-  const copyFlowPrompts = async () => {
-    const prompts = state.frames.map((frame, index) => `${index + 1}. ${frame.flow_prompt}`).join("\n\n");
+  const copyFlowPrompts = async (): Promise<void> => {
+    const prompts = state.frames
+      .map((frame, index) => {
+        const lines = [`${index + 1}. ${frame.flow_prompt}`];
+        if (frame.scene_story_beat) lines.push(`   Story beat: ${frame.scene_story_beat}`);
+        return lines.join("\n");
+      })
+      .join("\n\n");
     await navigator.clipboard.writeText(prompts);
-    alert("Copied all Flow prompts to clipboard!");
   };
 
   const handleNewProject = () => {

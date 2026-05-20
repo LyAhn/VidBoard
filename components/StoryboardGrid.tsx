@@ -5,6 +5,7 @@ import Image from "next/image";
 import {
   AlertTriangle,
   Camera,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -20,6 +21,7 @@ import {
   ZoomIn,
 } from "lucide-react";
 import type { AspectRatio, FrameData } from "@/lib/vidboard-types";
+import { useCopyFeedback } from "@/hooks/use-copy-feedback";
 
 export type CardLayout = "vertical" | "horizontal";
 
@@ -461,6 +463,9 @@ function CardFooter({
   onToggleDescription: (idx: number) => void;
   onUpdateFrame: (frameIdx: number, updates: Partial<FrameData>) => void;
 }) {
+  const [flowCopied, copyFlow] = useCopyFeedback();
+  const [imgCopied, copyImg] = useCopyFeedback();
+
   return (
     <>
       <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded">
@@ -468,10 +473,10 @@ function CardFooter({
           Flow Prompt
           <button
             aria-label="Copy flow prompt"
-            onClick={() => { navigator.clipboard.writeText(frame.flow_prompt); }}
+            onClick={() => copyFlow(frame.flow_prompt)}
             className="opacity-40 hover:opacity-100 transition-opacity"
           >
-            <Copy className="w-3 h-3" />
+            {flowCopied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
           </button>
         </div>
         <EditableText
@@ -483,10 +488,10 @@ function CardFooter({
 
       <div className="flex gap-2">
         <button
-          onClick={() => { navigator.clipboard.writeText(frame.image_prompt); }}
+          onClick={() => copyImg(frame.image_prompt)}
           className="flex-1 py-1.5 border border-[#2a2a2a] hover:border-amber-500 text-[9px] font-bold uppercase rounded transition-colors"
         >
-          Copy Image Prompt
+          {imgCopied ? "Copied ✓" : "Copy Image Prompt"}
         </button>
         <button
           aria-label={expanded ? "Collapse image prompt" : "Expand image prompt"}
@@ -503,8 +508,116 @@ function CardFooter({
       </div>
 
       {expanded && (
-        <div className="bg-neutral-900/60 p-2 rounded border border-white/10">
+        <div className="bg-neutral-900/60 p-2 rounded border border-white/10 flex flex-col gap-2">
+          {frame.scene_story_beat && (
+            <div>
+              <div className="text-[9px] font-bold text-purple-400 uppercase tracking-widest mb-1">Story Beat</div>
+              <p className="text-[10px] text-neutral-400 italic leading-relaxed">{frame.scene_story_beat}</p>
+            </div>
+          )}
+          <div>
           <div className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Image Prompt</div>
+          <EditableText
+            value={frame.image_prompt}
+            onCommit={(v) => onUpdateFrame(idx, { image_prompt: v })}
+            label="image prompt"
+            className="font-mono"
+          />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Vertical card footer (extracted so hooks run per-card) ──
+
+function VerticalCardFooter({
+  frame,
+  idx,
+  expanded,
+  onToggleDescription,
+  onUpdateFrame,
+}: {
+  frame: FrameData;
+  idx: number;
+  expanded: boolean;
+  onToggleDescription: (idx: number) => void;
+  onUpdateFrame: (frameIdx: number, updates: Partial<FrameData>) => void;
+}) {
+  const [flowCopied, copyFlow] = useCopyFeedback();
+  const [imgCopied, copyImg] = useCopyFeedback();
+
+  return (
+    <div className="px-2.5 py-2 flex flex-col gap-1.5 border-t border-[#2a2a2a]">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          {frame.character_present && (
+            <span title="Character present" className="text-purple-400">
+              <User className="w-3 h-3" />
+            </span>
+          )}
+          <span title={frame.camera_angle} className="text-blue-400">
+            <Camera className="w-3 h-3" />
+          </span>
+          <span title={frame.lighting} className="text-amber-400">
+            <Sun className="w-3 h-3" />
+          </span>
+          <span title={frame.colour_palette} className="text-neutral-500">
+            <Palette className="w-3 h-3" />
+          </span>
+          <span className="text-[9px] text-neutral-600 truncate min-w-0 ml-1" title={frame.colour_palette}>
+            {frame.colour_palette}
+          </span>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => copyFlow(frame.flow_prompt)}
+            title="Copy Flow prompt"
+            className="p-1 border border-[#2a2a2a] hover:border-amber-500 rounded transition-colors"
+          >
+            {flowCopied
+              ? <Check className="w-3 h-3 text-green-400" />
+              : <Copy className="w-3 h-3 text-amber-500" />}
+          </button>
+          <button
+            onClick={() => copyImg(frame.image_prompt)}
+            title="Copy image prompt"
+            className="p-1 border border-[#2a2a2a] hover:border-amber-500 rounded transition-colors text-[8px] font-bold uppercase px-1.5"
+          >
+            {imgCopied
+              ? <Check className="w-3 h-3 text-green-400" />
+              : <span className="text-neutral-500">IMG</span>}
+          </button>
+          <button
+            aria-label={expanded ? "Collapse details" : "Expand details"}
+            aria-expanded={expanded}
+            className="p-1 border border-[#2a2a2a] hover:border-amber-500 rounded transition-colors"
+            onClick={() => onToggleDescription(idx)}
+          >
+            {expanded
+              ? <ChevronDown className="w-3 h-3 text-gray-500" />
+              : <ChevronRight className="w-3 h-3 text-gray-500" />}
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="flex flex-col gap-1.5 pt-1 border-t border-[#2a2a2a]">
+          <p className="text-[10px] text-gray-400 leading-relaxed">{frame.scene_description}</p>
+          {frame.scene_story_beat && (
+            <div>
+              <div className="text-[9px] font-bold text-purple-400 uppercase tracking-widest mb-0.5">Story Beat</div>
+              <p className="text-[10px] text-neutral-400 italic leading-relaxed">{frame.scene_story_beat}</p>
+            </div>
+          )}
+          <div className="text-[9px] font-bold text-amber-500 uppercase tracking-widest">Flow Prompt</div>
+          <EditableText
+            value={frame.flow_prompt}
+            onCommit={(v) => onUpdateFrame(idx, { flow_prompt: v })}
+            label="flow prompt"
+          />
+          <div className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Image Prompt</div>
           <EditableText
             value={frame.image_prompt}
             onCommit={(v) => onUpdateFrame(idx, { image_prompt: v })}
@@ -513,7 +626,7 @@ function CardFooter({
           />
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -585,84 +698,13 @@ function VerticalFrameCard({
         </div>
 
         {/* Compact footer strip */}
-        <div className="px-2.5 py-2 flex flex-col gap-1.5 border-t border-[#2a2a2a]">
-          {/* Icon-only badge row + copy actions on same line */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 min-w-0">
-              {frame.character_present && (
-                <span title="Character present" className="text-purple-400">
-                  <User className="w-3 h-3" />
-                </span>
-              )}
-              <span title={frame.camera_angle} className="text-blue-400">
-                <Camera className="w-3 h-3" />
-              </span>
-              <span title={frame.lighting} className="text-amber-400">
-                <Sun className="w-3 h-3" />
-              </span>
-              <span title={frame.colour_palette} className="text-neutral-500">
-                <Palette className="w-3 h-3" />
-              </span>
-              <span className="text-[9px] text-neutral-600 truncate min-w-0 ml-1" title={frame.colour_palette}>
-                {frame.colour_palette}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(frame.flow_prompt);
-                  alert("Flow prompt copied!");
-                }}
-                title="Copy Flow prompt"
-                className="p-1 border border-[#2a2a2a] hover:border-amber-500 rounded transition-colors"
-              >
-                <Copy className="w-3 h-3 text-amber-500" />
-              </button>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(frame.image_prompt);
-                  alert("Image prompt copied!");
-                }}
-                title="Copy image prompt"
-                className="p-1 border border-[#2a2a2a] hover:border-amber-500 rounded transition-colors text-[8px] font-bold text-neutral-500 uppercase px-1.5"
-              >
-                IMG
-              </button>
-              <button
-                aria-label={expanded ? "Collapse details" : "Expand details"}
-                aria-expanded={expanded}
-                className="p-1 border border-[#2a2a2a] hover:border-amber-500 rounded transition-colors"
-                onClick={() => onToggleDescription(idx)}
-              >
-                {expanded ? (
-                  <ChevronDown className="w-3 h-3 text-gray-500" />
-                ) : (
-                  <ChevronRight className="w-3 h-3 text-gray-500" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Expanded detail drawer */}
-          {expanded && (
-            <div className="flex flex-col gap-1.5 pt-1 border-t border-[#2a2a2a]">
-              <p className="text-[10px] text-gray-400 leading-relaxed">{frame.scene_description}</p>
-              <div className="text-[9px] font-bold text-amber-500 uppercase tracking-widest">Flow Prompt</div>
-              <EditableText
-                value={frame.flow_prompt}
-                onCommit={(v) => onUpdateFrame(idx, { flow_prompt: v })}
-                label="flow prompt"
-              />
-              <div className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Image Prompt</div>
-              <EditableText
-                value={frame.image_prompt}
-                onCommit={(v) => onUpdateFrame(idx, { image_prompt: v })}
-                label="image prompt"
-                className="font-mono"
-              />
-            </div>
-          )}
-        </div>
+        <VerticalCardFooter
+          frame={frame}
+          idx={idx}
+          expanded={expanded}
+          onToggleDescription={onToggleDescription}
+          onUpdateFrame={onUpdateFrame}
+        />
       </div>
     </div>
   );
