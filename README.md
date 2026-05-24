@@ -80,6 +80,7 @@ cd VidBoard
 pnpm install
 cp .env.example .env.local
 # Edit .env.local — at minimum set OLLAMA_API_KEY
+pnpm run db:push
 pnpm run dev
 ```
 
